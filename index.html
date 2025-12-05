@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Author Communities & Centrality Rings</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script src="https://d3js.org/d3.v7.min.js" defer></script>
+    <script type="module" src="./main.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <main>
+        <h1>Author Communities & Centrality Rings</h1>
+        <p>
+          Authors are colored by their detected community and positioned in concentric rings
+          representing centrality tiers. Use the edge-weight histogram to filter links, inspect the
+          centralization score distribution, and hover over the language popularity chart to see
+          which languages dominate the corpus.
+        </p>
+        <div class="cluster-controls">
+          <section class="control-section">
+            <h3>Language &amp; filter summaries</h3>
+            <div class="control-grid triple">
+              <label class="language-ratio-block histogram-control control-card">
+                Language popularity ratios
+                <div id="languageRatioBarChart" class="bar-chart"></div>
+                <div id="languageRatioStats" class="selection-hint"></div>
+                <div class="selection-hint">Click bars to filter authors (Ctrl+click for multiple languages).</div>
+              </label>
+              <label class="histogram-control control-card">
+                Edge weight window (drag across the histogram)
+                <div id="authorAuthorHistogram" class="histogram brushable"></div>
+                <div id="authorAuthorRangeValue" class="selection-hint">
+                  Showing all connection weights.
+                </div>
+              </label>
+              <label class="centralization-block histogram-control control-card">
+                Centralization score window (brush to focus authors)
+                <div id="centralizationHistogram" class="histogram large brushable"></div>
+                <div id="centralizationRangeValue" class="selection-hint">
+                  Showing authors across all centralization scores.
+                </div>
+                <div id="centralizationStats" class="selection-hint"></div>
+              </label>
+            </div>
+          </section>
+          <section class="control-section control-actions">
+            <div class="control-actions-left">
+              <label class="toggle-option">
+                <input id="showEdgesToggle" type="checkbox" checked />
+                <span>Show edges between authors</span>
+              </label>
+              <div class="selection-hint">Hide edges to focus solely on the concentric layout; filters still apply.</div>
+              <label class="toggle-option">
+                <input id="translationOpacityToggle" type="checkbox" />
+                <span>Use translation totals to modulate node opacity</span>
+              </label>
+              <div class="selection-hint">More translations → more opaque nodes; fewer translations → lighter nodes.</div>
+              <label class="toggle-option">
+                <input id="sharedEdgesOnly" type="checkbox" />
+                <span>Only show connections shared by selected authors</span>
+              </label>
+              <div class="selection-hint">Filters edges down to overlaps between the currently selected authors.</div>
+            </div>
+            <div class="control-actions-right">
+              <div class="action-button-group">
+                <button id="clearSelection" type="button" class="icon-button" aria-label="Clear selection">
+                  <span aria-hidden="true">⟲</span>
+                </button>
+                <div class="action-description">Reset current selections</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </header>
+    <main>
+      <div id="filterStatusBar" class="filter-status-bar">
+        <div class="filter-status-content">
+          <span class="filter-status-label">Active Filters:</span>
+          <div id="filterStatusItems" class="filter-status-items">
+            <span class="filter-status-item filter-status-none">None</span>
+          </div>
+        </div>
+        <button id="clearAllFilters" type="button" class="filter-status-clear" title="Clear all filters">
+          Clear All
+        </button>
+      </div>
+      <div class="cluster-layout-wrapper">
+        <section class="panel">
+          <div class="chart-header">
+            <div>
+              <h2>Author similarity network</h2>
+              <div class="selection-hint">Use <kbd>Ctrl</kbd>+click to select multiple authors and reveal labels.</div>
+            </div>
+            <label class="search-control chart-search">
+              Find author
+              <input id="authorSearchInput" type="search" placeholder="Start typing a name" autocomplete="off" />
+              <div id="authorSearchSuggestions" class="search-suggestions"></div>
+              <div class="selection-hint">Type to highlight matches. Press Enter to jump to the top match.</div>
+            </label>
+          </div>
+          <div id="clusterChart" class="chart" style="height: 70vh; min-height: 520px"></div>
+        </section>
+        <aside class="panel filter-panel">
+          <div id="authorDetailPanel" class="author-detail-card">
+            <p class="author-detail-empty">Select an author to see translation stats and relationship insights.</p>
+          </div>
+          <div class="chord-diagram-section">
+            <div class="chord-diagram-header">
+              <h2>Language translation flows</h2>
+              <button id="maximizeChordBtn" type="button" class="maximize-button" title="Maximize chart" aria-label="Maximize language flow chart">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+              </button>
+            </div>
+            <div id="chordDiagram" class="chord-diagram-container"></div>
+            <div class="chord-diagram-hint">Hover to see flows. Click arc to filter authors by language (Ctrl+click for multiple).</div>
+          </div>
+          <div class="chord-diagram-section">
+            <div class="chord-diagram-header">
+              <h2>German translation flow</h2>
+              <button id="maximizeRadialBtn" type="button" class="maximize-button" title="Maximize radial chart" aria-label="Maximize radial chart">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
+                </svg>
+              </button>
+            </div>
+            <div id="radialChart" class="radial-chart-container"></div>
+            <div class="chord-diagram-hint">Radial view showing authors translating from German to target languages.</div>
+          </div>
+          <h2>Cluster language filter</h2>
+          <div class="cluster-filter-actions">
+            <span>Select a community to filter the graph.</span>
+            <button type="button" id="resetClusterFilter">Show all</button>
+          </div>
+          <div id="clusterLanguageFilter" class="cluster-filter-grid"></div>
+        </aside>
+      </div>
+    </main>
+    <div id="chordModal" class="chord-modal" style="display: none;">
+      <div class="chord-modal-content">
+        <div class="chord-modal-header">
+          <h2>Language Translation Flows</h2>
+          <button id="closeChordModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+            </svg>
+          </button>
+        </div>
+        <div id="chordDiagramLarge" class="chord-diagram-large"></div>
+        <div class="chord-diagram-hint">Hover to see flows. Click arc to filter authors by language (Ctrl+click for multiple).</div>
+      </div>
+    </div>
+    <div id="radialModal" class="chord-modal" style="display: none;">
+      <div class="chord-modal-content">
+        <div class="chord-modal-header">
+          <h2>German Translation Flow</h2>
+          <button id="closeRadialModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+            </svg>
+          </button>
+        </div>
+        <div id="radialChartZoomed" class="radial-chart-zoomed"></div>
+        <div class="chord-diagram-hint">Radial view with German at center showing translation flows to target languages.</div>
+      </div>
+    </div>
+  </body>
+</html>
