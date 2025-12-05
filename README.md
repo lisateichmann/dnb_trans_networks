@@ -210,9 +210,6 @@ Output saved to `plots/centralization/` and `plots/dendrograms/`.
 > Cool buttons to have that match figures - clicking these automatically sets some configuration and updates the visualization to show that state   
 > Top 50 authors (by degree)
 
-- [ ] Double check how the dendogram is drawn - 2 v 6 splits or something
-
-
 
 ## Technical Details
 
@@ -243,5 +240,3 @@ Those ratios are still recomputed directly from `data.csv` on load by counting e
 > _Screenshot placeholder: Cluster language filter side panel showing community cards and dominant languages._
 
 The concentric rings are driven by `centralizationScoreNormalized`, but instead of hard-coded thresholds they adapt to the current dataset: the script samples the distribution, places roughly the top 15 % of authors in the **Core**, the middle tranche in the **Periphery**, and everyone below the lower quantile in the **Outer periphery**. (Exact breakpoints are shown above the histogram each time the view loads.) Within each community sector, authors are sorted by their score (higher = closer to the center) and then nudged slightly by a collision-avoidance pass to keep overlaps manageable.
-
-
