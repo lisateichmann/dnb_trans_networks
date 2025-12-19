@@ -242,10 +242,4 @@ Those ratios are still recomputed directly from `data.csv` on load by counting e
 
 > _Screenshot placeholder: Cluster language filter side panel showing community cards and dominant languages._
 
-<<<<<<< HEAD
 The concentric rings are driven by `centralizationScoreNormalized`, but instead of hard-coded thresholds they adapt to the current dataset: the script samples the distribution, places roughly the top 15 % of authors in the **Core**, the middle tranche in the **Periphery**, and everyone below the lower quantile in the **Outer periphery**. (Exact breakpoints are shown above the histogram each time the view loads.) Within each community sector, authors are sorted by their score (higher = closer to the center) and then nudged slightly by a collision-avoidance pass to keep overlaps manageable.
-=======
-The concentric rings are driven by `centralizationScoreNormalized`, but instead of hard-coded thresholds they adapt to the current dataset: the script samples the distribution, places roughly the top 15 % of authors in the **Core**, the middle tranche in the **Periphery**, and everyone below the lower quantile in the **Outer periphery**. (Exact breakpoints are shown above the histogram each time the view loads.) Within each community sector, authors are sorted by their score (higher = closer to the center) and then nudged slightly by a collision-avoidance pass to keep overlaps manageable.
-
-
->>>>>>> add9a70 (update readme, data, figures)
