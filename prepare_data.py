@@ -755,14 +755,12 @@ def _build_language_language_graph(
     # Compute community detection for language-language graph (controlled by CLI)
     communities_summary: Dict[str, List[List[str]]] = {}
     community_assignments: Dict[str, Dict[str, int]] = {}
-    language_community_algorithms = [
-        alg for alg in (community_algorithms or []) if alg == "greedy"
-    ]
-    if graph.number_of_edges() > 0 and graph.number_of_nodes() > 0 and enable_communities:
+    language_community_algorithms = ["greedy"]
+    if graph.number_of_edges() > 0 and graph.number_of_nodes() > 0: #and enable_communities
         if "greedy" in language_community_algorithms:
             log("Running greedy modularity community detection for language-language graph…")
             start = perf_counter()
-            greedy_parts = greedy_modularity_communities(graph, weight="weight")
+            greedy_parts = greedy_modularity_communities(graph, weight="weight", resolution=1.05, best_n=3) # 
             elapsed = perf_counter() - start
             communities_summary["greedy"] = [sorted(list(c)) for c in greedy_parts]
             community_assignments["greedy"] = {}

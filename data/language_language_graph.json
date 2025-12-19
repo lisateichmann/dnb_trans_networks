@@ -8,7 +8,7 @@
       "greedy"
     ],
     "communities": {
-      "greedy": 0
+      "greedy": 3
     }
   },
   "nodes": [
@@ -19,7 +19,7 @@
       "totalWeight": 17,
       "authorCount": 3,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -31,7 +31,7 @@
       "totalWeight": 112,
       "authorCount": 61,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -43,7 +43,7 @@
       "totalWeight": 144,
       "authorCount": 83,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -55,7 +55,7 @@
       "totalWeight": 24,
       "authorCount": 17,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -67,7 +67,7 @@
       "totalWeight": 25,
       "authorCount": 17,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -79,7 +79,7 @@
       "totalWeight": 57,
       "authorCount": 39,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -91,7 +91,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -103,7 +103,7 @@
       "totalWeight": 36,
       "authorCount": 30,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -115,7 +115,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -127,7 +127,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -139,7 +139,7 @@
       "totalWeight": 22,
       "authorCount": 20,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -151,7 +151,7 @@
       "totalWeight": 5,
       "authorCount": 4,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -163,7 +163,7 @@
       "totalWeight": 737,
       "authorCount": 356,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -175,7 +175,7 @@
       "totalWeight": 389,
       "authorCount": 146,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -187,7 +187,7 @@
       "totalWeight": 465,
       "authorCount": 186,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -199,7 +199,7 @@
       "totalWeight": 2083,
       "authorCount": 758,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -211,7 +211,7 @@
       "totalWeight": 526,
       "authorCount": 256,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -223,7 +223,7 @@
       "totalWeight": 2,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -235,7 +235,7 @@
       "totalWeight": 1844,
       "authorCount": 712,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -247,7 +247,7 @@
       "totalWeight": 2802,
       "authorCount": 967,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -259,7 +259,7 @@
       "totalWeight": 30,
       "authorCount": 20,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -271,7 +271,7 @@
       "totalWeight": 392,
       "authorCount": 235,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -283,7 +283,7 @@
       "totalWeight": 3,
       "authorCount": 3,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -295,7 +295,7 @@
       "totalWeight": 344,
       "authorCount": 192,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -307,7 +307,7 @@
       "totalWeight": 3461,
       "authorCount": 951,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -319,7 +319,7 @@
       "totalWeight": 12,
       "authorCount": 10,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -331,7 +331,7 @@
       "totalWeight": 73,
       "authorCount": 47,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -343,7 +343,7 @@
       "totalWeight": 1017,
       "authorCount": 568,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -355,7 +355,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -367,7 +367,7 @@
       "totalWeight": 2,
       "authorCount": 2,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -379,7 +379,7 @@
       "totalWeight": 38,
       "authorCount": 29,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -391,7 +391,7 @@
       "totalWeight": 540,
       "authorCount": 232,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -403,7 +403,7 @@
       "totalWeight": 67,
       "authorCount": 26,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -415,7 +415,7 @@
       "totalWeight": 247,
       "authorCount": 144,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -427,7 +427,7 @@
       "totalWeight": 8,
       "authorCount": 7,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -439,7 +439,7 @@
       "totalWeight": 388,
       "authorCount": 211,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -451,7 +451,7 @@
       "totalWeight": 1103,
       "authorCount": 429,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -463,7 +463,7 @@
       "totalWeight": 37,
       "authorCount": 27,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -475,7 +475,7 @@
       "totalWeight": 14,
       "authorCount": 11,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -487,7 +487,7 @@
       "totalWeight": 2282,
       "authorCount": 738,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -499,7 +499,7 @@
       "totalWeight": 449,
       "authorCount": 225,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -511,7 +511,7 @@
       "totalWeight": 2,
       "authorCount": 2,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -523,7 +523,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -535,7 +535,7 @@
       "totalWeight": 201,
       "authorCount": 120,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -547,7 +547,7 @@
       "totalWeight": 3,
       "authorCount": 3,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -559,7 +559,7 @@
       "totalWeight": 12,
       "authorCount": 6,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -571,7 +571,7 @@
       "totalWeight": 379,
       "authorCount": 193,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -583,7 +583,7 @@
       "totalWeight": 447,
       "authorCount": 232,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -595,7 +595,7 @@
       "totalWeight": 3,
       "authorCount": 2,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -607,7 +607,7 @@
       "totalWeight": 93,
       "authorCount": 57,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -619,7 +619,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -631,7 +631,7 @@
       "totalWeight": 3,
       "authorCount": 3,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -643,7 +643,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -655,7 +655,7 @@
       "totalWeight": 8,
       "authorCount": 8,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -667,7 +667,7 @@
       "totalWeight": 6,
       "authorCount": 6,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -679,7 +679,7 @@
       "totalWeight": 70,
       "authorCount": 31,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -691,7 +691,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -703,7 +703,7 @@
       "totalWeight": 481,
       "authorCount": 211,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -715,7 +715,7 @@
       "totalWeight": 2,
       "authorCount": 2,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -727,7 +727,7 @@
       "totalWeight": 121,
       "authorCount": 53,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -739,7 +739,7 @@
       "totalWeight": 1686,
       "authorCount": 624,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -751,7 +751,7 @@
       "totalWeight": 741,
       "authorCount": 246,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -763,7 +763,7 @@
       "totalWeight": 12,
       "authorCount": 9,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -775,7 +775,7 @@
       "totalWeight": 433,
       "authorCount": 193,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -787,7 +787,7 @@
       "totalWeight": 1239,
       "authorCount": 443,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -799,7 +799,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -811,7 +811,7 @@
       "totalWeight": 361,
       "authorCount": 194,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -823,7 +823,7 @@
       "totalWeight": 437,
       "authorCount": 239,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -835,7 +835,7 @@
       "totalWeight": 2919,
       "authorCount": 758,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -847,7 +847,7 @@
       "totalWeight": 588,
       "authorCount": 238,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -859,7 +859,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -871,7 +871,7 @@
       "totalWeight": 598,
       "authorCount": 267,
       "communities": {
-        "greedy": -1
+        "greedy": 2
       },
       "centrality": {},
       "centralityTier": {}
@@ -883,7 +883,7 @@
       "totalWeight": 7,
       "authorCount": 5,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -895,7 +895,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -907,7 +907,7 @@
       "totalWeight": 677,
       "authorCount": 295,
       "communities": {
-        "greedy": -1
+        "greedy": 1
       },
       "centrality": {},
       "centralityTier": {}
@@ -919,7 +919,7 @@
       "totalWeight": 115,
       "authorCount": 66,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -931,7 +931,7 @@
       "totalWeight": 4,
       "authorCount": 3,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -943,7 +943,7 @@
       "totalWeight": 52,
       "authorCount": 29,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -955,7 +955,7 @@
       "totalWeight": 2,
       "authorCount": 2,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -967,7 +967,7 @@
       "totalWeight": 1,
       "authorCount": 1,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -979,7 +979,7 @@
       "totalWeight": 6,
       "authorCount": 6,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
@@ -991,7 +991,7 @@
       "totalWeight": 3,
       "authorCount": 3,
       "communities": {
-        "greedy": -1
+        "greedy": 0
       },
       "centrality": {},
       "centralityTier": {}
