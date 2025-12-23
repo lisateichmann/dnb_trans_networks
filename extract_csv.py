@@ -15,14 +15,20 @@ for node in lang_data['nodes']:
         'authorCount': node['authorCount']
     })
 
+
+# Ensure the output directory exists
+output_dir = Path('extracted')
+output_dir.mkdir(exist_ok=True)
+
 # Write language nodes data to CSV
-with open('language_nodes.csv', 'w', newline='', encoding='utf-8') as csvfile:
+language_nodes_path = output_dir / 'language_nodes.csv'
+with language_nodes_path.open('w', newline='', encoding='utf-8') as csvfile:
     fieldnames = ['language', 'greedy', 'authorCount']
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(nodes_data)
 
-print(f"Created language_nodes.csv with {len(nodes_data)} languages")
+print(f"Created {language_nodes_path} with {len(nodes_data)} languages")
 
 # Extract language edges data: source language, target language, weight
 edges_data = []
@@ -33,14 +39,16 @@ for edge in lang_data['links']:
         'weight': edge['weight']
     })
 
+
 # Write language edges data to CSV
-with open('language_edges.csv', 'w', newline='', encoding='utf-8') as csvfile:
+language_edges_path = output_dir / 'language_edges.csv'
+with language_edges_path.open('w', newline='', encoding='utf-8') as csvfile:
     fieldnames = ['source_language', 'target_language', 'weight']
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(edges_data)
 
-print(f"Created language_edges.csv with {len(edges_data)} edges")
+print(f"Created {language_edges_path} with {len(edges_data)} edges")
 
 # Read the author-author graph JSON file
 with open('data/author_author_graph.json', 'r', encoding='utf-8') as f:
@@ -94,26 +102,30 @@ community_1_2_edges = [
 # Write CSV files
 fieldnames = ['source', 'target', 'weight', 'source_community', 'target_community']
 
+
 # All three communities
-with open('author_edges_all_communities.csv', 'w', newline='', encoding='utf-8') as csvfile:
+author_edges_all_path = output_dir / 'author_edges_all_communities.csv'
+with author_edges_all_path.open('w', newline='', encoding='utf-8') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(all_three_communities_edges)
 
-print(f"Created author_edges_all_communities.csv with {len(all_three_communities_edges)} edges")
+print(f"Created {author_edges_all_path} with {len(all_three_communities_edges)} edges")
 
 # Community 0 only
-with open('author_edges_community_0.csv', 'w', newline='', encoding='utf-8') as csvfile:
+author_edges_0_path = output_dir / 'author_edges_community_0.csv'
+with author_edges_0_path.open('w', newline='', encoding='utf-8') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(community_0_edges)
 
-print(f"Created author_edges_community_0.csv with {len(community_0_edges)} edges")
+print(f"Created {author_edges_0_path} with {len(community_0_edges)} edges")
 
 # Communities 1 and 2 only
-with open('author_edges_community_1_2.csv', 'w', newline='', encoding='utf-8') as csvfile:
+author_edges_1_2_path = output_dir / 'author_edges_community_1_2.csv'
+with author_edges_1_2_path.open('w', newline='', encoding='utf-8') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(community_1_2_edges)
 
-print(f"Created author_edges_community_1_2.csv with {len(community_1_2_edges)} edges")
+print(f"Created {author_edges_1_2_path} with {len(community_1_2_edges)} edges")
