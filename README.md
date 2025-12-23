@@ -2,6 +2,7 @@
 
 A network analysis and interactive visualization project exploring German fiction translation patterns using data from the German National Library (Deutsche Nationalbibliothek).
 
+
 ## Project Overview
 
 This project analyzes the translation networks of German literature by examining relationships between authors, languages, and their translation patterns. It constructs three interconnected network representations:
@@ -10,7 +11,10 @@ This project analyzes the translation networks of German literature by examining
 2. **Author-Author Network** (unimodal): Connects authors who share common translation languages, revealing communities and influence patterns
 3. **Language-Language Network**: Links languages that share translated authors, showing translation corridors and flows
 
-The analysis pipeline combines Python-based network construction and analysis with an interactive D3.js visualization that allows exploration of author communities, centrality metrics, and language popularity patterns through a rich web-based interface.
+
+The analysis pipeline combines Python-based network construction and analysis with:
+- **Interactive D3.js visualization**: Explore author communities, centrality, and language flows in a rich web UI.
+- **Tabular and Markdown exports**: Scripts generate CSV and Markdown tables for reproducible analysis and reporting.
 
 ## Project Structure
 
@@ -18,35 +22,53 @@ The analysis pipeline combines Python-based network construction and analysis wi
 ├── data.csv                          # Source translation data
 ├── prepare_data.py                   # Network construction and analysis
 ├── analyze_networks.py               # Statistical analysis and plotting
+├── extract_csv.py                    # Export CSVs from network JSONs for tabular analysis
+├── plot_networks.py                  # Generates plots and Markdown tables from network data
 ├── index.html                        # Main visualization interface
-├── main.js                          # Visualization orchestration
+├── main.js                           # Visualization orchestration
 ├── requirements.txt                  # Python dependencies
-├── data/                            # Generated network JSON files
+├── data/                             # Generated network JSON files
 │   ├── author_author_graph.json
 │   ├── author_language_graph.json
 │   └── language_language_graph.json
-├── plots/                           # Analysis outputs
-│   ├── centralization/             # Centrality distributions
-│   └── dendrograms/                # Community structure plots
-└── src/                            # Visualization modules
-    ├── app.js                      # Main application logic
-    ├── authorAuthor.js             # Author network visualization
-    ├── authorLanguage.js           # Bipartite visualization
-    ├── languageLanguage.js         # Language network visualization
-    ├── styles.css                  # Styling
-    └── utils.js                    # Shared utilities
+├── extracted/                        # CSVs exported from JSONs (for tables/analysis)
+│   ├── author_edges_all_communities.csv
+│   ├── author_edges_community_0.csv
+│   ├── author_edges_community_1_2.csv
+│   ├── language_edges.csv
+│   └── language_nodes.csv
+├── plots/                            # Analysis outputs
+│   ├── centralization/               # Centrality distributions
+│   ├── dendrograms/                  # Community structure plots
+│   └── tables/                       # Markdown tables generated from CSVs
+│       ├── author_edges_all_communities.md
+│       ├── author_edges_community_0.md
+│       ├── author_edges_community_1_2.md
+│       ├── language_edges.md
+│       └── language_nodes.md
+└── src/                              # Visualization modules
+	├── app.js                        # Main application logic
+	├── authorAuthor.js               # Author network visualization
+	├── authorLanguage.js             # Bipartite visualization
+	├── languageLanguage.js           # Language network visualization
+	├── styles.css                    # Styling
+	└── utils.js                      # Shared utilities
 ```
+
 
 ## Workflow
 
-The project has two main phases:
+The project workflow consists of:
 
-1. **Data Preparation**: Convert CSV translation data into network JSON files with optional community detection and centrality metrics (`prepare_data.py`)
-2. **Interactive Visualization**: Explore the networks through a web-based D3.js interface (`index.html`)
+1. **Data Preparation**: Convert CSV translation data into network JSON files with optional community detection and centrality metrics (`prepare_data.py`).
+2. **Export CSVs**: Use `extract_csv.py` to export author/language edge and node tables from the JSONs for further analysis or reporting.
+3. **Statistical Analysis & Markdown Tables**: Run `plot_networks.py` to generate centrality/community plots and Markdown tables from the exported CSVs.
+4. **Interactive Visualization**: Explore the networks and all analytics through a web-based D3.js interface (`index.html`).
+
 
 ## 1. Prepare the data
 
-The script expects the cleaned CSV files already present under `Network Analysis/`.
+The script expects the cleaned CSV files already present in the project root.
 
 ### Quick start
 
@@ -58,6 +80,28 @@ python prepare_data.py --top-languages 40 --top-authors 200
 ```
 
 `prepare_data.py` only runs the heavy analytics (community detection + centrality metrics) when you ask for them, so incremental runs can focus on a single measure without recomputing everything. Re-running with different options merges the new metrics/communities into the existing `author_author_graph.json` instead of overwriting previous results.
+
+## 2. Export CSVs for tabular analysis
+
+Run:
+
+```bash
+python extract_csv.py
+```
+
+This generates CSVs in `extracted/` for author/language edges and nodes, split by community as needed.
+
+## 3. Generate plots and Markdown tables
+
+Run:
+
+```bash
+python plot_networks.py --output-dir plots --convert-csv-to-markdown
+```
+
+This creates:
+- Centrality and community distribution plots in `plots/centralization/` and `plots/dendrograms/`
+- Markdown tables for each CSV in `plots/tables/` (with summary statistics)
 
 ### Key arguments
 
@@ -130,116 +174,108 @@ Running the script writes three JSON files under `data/`:
 
 Optional community detection (Leiden, Infomap) requires `igraph`, `leidenalg`, and `infomap`, all pre-listed in `requirements.txt`. If a library is missing, that algorithm is skipped automatically. **Note:** `infomap` does not work on Windows machines.
 
-## 2. Launch the visualizations
 
-Use any static web server so the browser can load the JSON files via `fetch`. A simple option with Python:
+## 4. Launch the interactive visualizations
+
+Use any static web server so the browser can load the JSON files via `fetch`. For example:
 
 ```bash
-cd /path/to/dnb_trans_networks
 python -m http.server 8000
 ```
 
 Then navigate to http://localhost:8000/ in your browser.
 
+
 ## Interactive Visualization Features
 
-The web-based visualization focuses on the **Author Communities & Centrality Rings** network, featuring a concentric ring layout where authors are positioned based on their centrality within the translation ecosystem.
+The web-based visualization provides:
 
-### Layout & Visual Encoding
+- **Concentric Rings**: Authors are arranged in three adaptive tiers (Core, Periphery, Outer Periphery) based on normalized centralization scores.
+- **Community Colors**: Authors are color-coded by detected community (Louvain, Leiden, Infomap).
+- **Node Size**: Encodes total translation count for each author.
+- **Edge Thickness**: Represents connection strength (shared translation languages).
+- **Language Popularity Bar Chart**: Click/ctrl+click to filter authors by language; hover for precise percentages.
+- **Edge Weight & Centralization Histograms**: Brush to filter by connection strength or centrality tier; breakpoints and stats shown.
+- **Author Search**: Type-ahead search with real-time suggestions and instant highlighting.
+- **Community Filter Panel**: Select communities to filter the canvas; only shows edges where both endpoints share a translated language.
+- **Chord & Radial Diagrams**: Visualize translation flows between languages and from German to targets.
+- **Toggle Controls**: Show/hide edges, modulate node opacity by translation totals, restrict to shared connections.
+- **Download Buttons**: Export filtered JSONs for further analysis.
+- **Filter Status Bar**: Shows all active filters with a "Clear All" button.
+- **Selection & Navigation**: Click nodes to focus on neighbors; pan/zoom; reset selection with ⟲.
 
-- **Concentric Rings**: Authors are arranged in three adaptive tiers (Core, Periphery, Outer Periphery) based on normalized centralization scores—typically the top 15% occupy the Core, with breakpoints displayed in the histogram
-- **Community Colors**: Authors are color-coded by detected community (Louvain, Leiden, or Infomap algorithms)
-- **Node Size**: Encodes total translation count for each author
-- **Edge Thickness**: Represents connection strength based on shared translation languages
-- **Spatial Layout**: Within each community sector, authors are sorted by score and positioned with collision-avoidance
 
-### Interactive Controls
+All visualizations update dynamically as you interact—no page reloads required.
 
-**Language Popularity Chart** — Horizontal scrollable bar chart showing translation distribution across languages; click bars to filter authors by language (Ctrl+click for multiple); hover for precise percentages
+## Deploy to GitHub Pages
 
-**Edge Weight Histogram** — Brushable histogram for filtering connections by strength; drag to select weight ranges; active range displayed below
+You can deploy the interactive visualization (including all JSON and CSV data files) to GitHub Pages using the provided workflow. This allows you to share your analysis and interactive dashboard as a static website, with all data files accessible for client-side loading.
 
-**Centralization Score Window** — Brushable histogram of author centralization scores; filter by network hierarchy position; shows tier breakpoints and statistics
+### How it works
 
-**Author Search** — Type-ahead search with real-time suggestions in the network header; instantly highlights matching authors
+- The workflow in `.github/workflows/deploy-pages.yml` automatically deploys the repository to GitHub Pages on every push to the `main` branch (or when manually triggered).
+- It uploads the entire repository contents (including `index.html`, all scripts, JSON, and CSV files) as a static site.
+- GitHub Pages serves all files as static assets, so your D3.js app can fetch JSON and CSV files just like when running `python -m http.server` locally.
 
-**Community Filter Panel** — Sticky side panel listing communities with dominant languages; select communities to filter the canvas; only shows edges where both endpoints share a translated language
+### Steps to deploy
 
-**Toggle Options:**
-- Show/hide edges between authors to focus on spatial layout
-- Use translation totals to modulate node opacity (more translations = more opaque)
-- Show only shared connections between selected authors
+1. **Push your changes to the `main` branch** (or trigger the workflow manually from the Actions tab).
+2. The workflow will build and deploy the site to GitHub Pages automatically.
+3. After deployment, your site will be available at:
+	- `https://<your-username>.github.io/<your-repo>/` (for user/org pages, or with the repo name for project pages)
 
-**Filter Status Bar** — Displays all active filters with a "Clear All" button for quick reset
+### Notes
 
-**Selection & Navigation** — Click nodes to focus on immediate neighbors; pan/zoom with mouse gestures; clear selection button (⟲) to reset; warped-force layout runs in static mode for immediate display
+- No build step is required: the workflow simply uploads your static files as-is.
+- All data files in `data/`, `extracted/`, and generated plots/tables are accessible to the web app and can be fetched by D3.js.
+- If you add or update data, just commit and push—GitHub Pages will serve the latest version after the workflow completes.
 
-The interface dynamically updates all visualizations as you interact, providing immediate feedback without page reloads. Language popularity ratios are recomputed from `data.csv` on load.
+### Local development
 
-## Statistical Analysis
-
-The `analyze_networks.py` script provides additional analytical capabilities:
+For local testing, you can continue to use:
 
 ```bash
-python analyze_networks.py --output-dir plots
+python -m http.server 8000
 ```
 
-Generates:
-- **Community parameter analysis**: Plots community counts vs. parameter settings
-- **Centrality distributions**: Visualizes metric distributions across the network  
-- **Dendrograms**: Hierarchical clustering visualizations for greedy community detection
-
-Output saved to `plots/centralization/` and `plots/dendrograms/`.
-
-## Future Enhancements
-
-- Greedy community detection for languages with dendrogram visualization
-- Chord diagram showing language-language translation "flow"
-- Quick-preset buttons (e.g., "Top 50 authors by degree")
-- Modified chord diagram with German as central "source" language
-
-## TODO:
-- [ ] We want to compute the greedy community detection for languages and visualize it as a dendogram 
-> The language communities serve as a selection / filtration mechanism for the centralization visualization.   
-> Selecting one or multiple communities filters the author-author network to those authors and keeps only edges where both endpoints share at least one translated language.   
-> Author nodes remain color-coded by community; multi-community authors inherit whichever assignment is active in the JSON metadata.   
-> Author node size still encodes the weighted translation totals.   
+This mimics the static file serving provided by GitHub Pages.
 
 
-- [ ] If time maybe some cool features like the following
-> Cool buttons to have that match figures - clicking these automatically sets some configuration and updates the visualization to show that state   
-> Top 50 authors (by degree)
+## Statistical Analysis & Reporting
 
-- [ ] Double check how the dendogram is drawn - 2 v 6 splits or something
+- `analyze_networks.py` and `plot_networks.py` provide additional analytics:
+	- **Community parameter analysis**: Plots community counts vs. parameter settings
+	- **Centrality distributions**: Visualizes metric distributions across the network
+	- **Dendrograms**: Hierarchical clustering for greedy community detection
+	- **Markdown tables**: All exported CSVs are converted to Markdown with summary statistics for reproducible reporting
 
-
+Outputs are saved to `plots/centralization/`, `plots/dendrograms/`, and `plots/tables/`.
 
 ## Technical Details
 
 **Data Format** — Three JSON network files containing nodes with metadata (communities, centrality metrics, language breakdowns), edges with weights (shared language/translation counts), and graph-level metadata (popularity ratios, statistics)
 
+
 **Dependencies:**
-- Python: pandas, networkx, igraph, leidenalg, infomap, matplotlib, scipy
+- Python: pandas, networkx, igraph, leidenalg, infomap, matplotlib, scipy, tabulate
 - JavaScript: D3.js v7
 - **Note**: `infomap` not compatible with Windows
 
+
 **Browser Compatibility** — Modern browsers with ES6 module and SVG support
+
 
 > _Screenshot placeholder: Wide shot of the cluster dashboard showing histograms, language bars, and toggles._
 
-The warped-force layout runs in static mode by default so you see the final rings immediately, but you can still pan or zoom without restarting the simulation.
 
-The **cluster view** now has a dashboard of scented controls that steer the canvas without reloading the page:
+The warped-force layout runs in static mode by default so you see the final rings immediately, but you can still pan or zoom without restarting the simulation. All controls and filters update the view instantly.
 
-- A horizontal language popularity chart (scrollable when there are many languages) doubles as a filter—click or Ctrl+click bars to focus the graph on specific translation destinations. Only languages still present after the data filters are shown.
-- Edge-weight and centralization histograms support brushing, letting you drag out the value windows instead of juggling numeric inputs; active ranges are displayed below each chart.
-- Author search moved into the network header, so every term immediately highlights matches and surfaces suggestions without crowding the main control stack.
-- A new “Show edges between authors” toggle hides links entirely when you want to focus on spatial layout, while the “Only show connections shared by selected authors” option further constrains link drawing to overlaps across the active selection.
+The **cluster view** dashboard includes:
+- Language popularity chart (filter by clicking bars)
+- Edge-weight and centralization histograms (brush to filter)
+- Author search in the header
+- Toggle controls for edges, opacity, and shared connections
+- Community/language filter side panel
+- Download/export buttons for filtered data
 
-Those ratios are still recomputed directly from `data.csv` on load by counting every language occurrence and normalizing by the total, and hovering the bars reveals precise percentages for the most common target languages. A sticky side panel lists each detected author community with its dominant translation languages; selecting one or more communities filters the canvas so only authors from those groups remain, and only edges where both endpoints share at least one translated language stay visible.
-
-> _Screenshot placeholder: Author similarity canvas with enlarged rings, fixed legend, and header search._
-
-> _Screenshot placeholder: Cluster language filter side panel showing community cards and dominant languages._
-
-The concentric rings are driven by `centralizationScoreNormalized`, but instead of hard-coded thresholds they adapt to the current dataset: the script samples the distribution, places roughly the top 15 % of authors in the **Core**, the middle tranche in the **Periphery**, and everyone below the lower quantile in the **Outer periphery**. (Exact breakpoints are shown above the histogram each time the view loads.) Within each community sector, authors are sorted by their score (higher = closer to the center) and then nudged slightly by a collision-avoidance pass to keep overlaps manageable.
+All ratios and statistics are recomputed from the current data and filters. Markdown tables and plots are always up to date with the latest exports.
