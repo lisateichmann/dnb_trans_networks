@@ -2,3 +2,6 @@
 data/*.json filter=lfs diff=lfs merge=lfs -text
 extracted/*.csv filter=lfs diff=lfs merge=lfs -text
 plots/tables/*.md filter=lfs diff=lfs merge=lfs -text
+data/author_author_graph.json filter=lfs diff=lfs merge=lfs -text
+data/author_language_graph.json filter=lfs diff=lfs merge=lfs -text
+data/language_language_graph.json filter=lfs diff=lfs merge=lfs -text
