@@ -377,6 +377,7 @@ def _build_bipartite_graph(
     centrality_metrics: List[str] | None,
     centralization_scores: Dict[str, float] | None,
     centralization_scores_normalized: Dict[str, float] | None,
+    language_communities: Dict[str, int] | None,
     *,
     enable_centrality: bool,
     graph_label: str = "author-language",
@@ -423,6 +424,14 @@ def _build_bipartite_graph(
     seen_authors = set(edges["author"].unique())
     for author in seen_authors:
         stats = author_stats.loc[author]
+        # Assign author to the language community of their most translated language in this subset
+        author_language_community = -1
+        if language_communities:
+            author_languages = edges[edges["author"] == author].sort_values("weight", ascending=False)
+            if not author_languages.empty:
+                most_translated_language = author_languages.iloc[0]["language"]
+                author_language_community = language_communities.get(most_translated_language, -1)
+        
         nodes.append(
             {
                 "id": author,
@@ -434,6 +443,7 @@ def _build_bipartite_graph(
                 "centralizationScoreNormalized": float(
                     (centralization_scores_normalized or {}).get(author, 0.0)
                 ),
+                "languageCommunity": author_language_community,
             }
         )
 
@@ -498,6 +508,7 @@ def _build_author_author_graph(
     centralization_scores: Dict[str, float] | None,
     centralization_scores_normalized: Dict[str, float] | None,
     language_popularity: Dict[str, float] | None,
+    language_communities: Dict[str, int] | None,
     *,
     enable_communities: bool,
     enable_centrality: bool,
@@ -648,6 +659,12 @@ def _build_author_author_graph(
                 lang_breakdown.items(), key=lambda item: item[1], reverse=True
             )
         ]
+        # Assign author to the language community of their most translated language
+        author_language_community = -1
+        if languages and language_communities:
+            most_translated_language = languages[0]["language"]
+            author_language_community = language_communities.get(most_translated_language, -1)
+        
         nodes.append(
             {
                 "id": author,
@@ -663,6 +680,7 @@ def _build_author_author_graph(
                     alg: community_assignments.get(alg, {}).get(author, -1)
                     for alg in community_algorithms
                 },
+                "languageCommunity": author_language_community,
                 "languages": languages,
                 "centrality": {
                     metric: value
@@ -952,8 +970,6 @@ def main() -> None:
     counts = _author_language_counts(records)
     _log_progress(f"Computed {len(counts):,} author-language pairs.")
 
-    ## TODO: Language-Language graph: edge weight = number of shared authors
-    ## TODO: Check out https://networkx.org/documentation/stable/reference/algorithms/generated/networkx.algorithms.community.modularity_max.greedy_modularity_communities.html
     author_stats = _author_stats(counts)
     language_stats = _language_stats(counts)
     author_language_breakdown = _author_language_breakdown(counts)
@@ -987,20 +1003,26 @@ def main() -> None:
 
     metrics_without_custom = [metric for metric in centrality_metrics if metric != "languagecentral"]
 
-    bipartite = _build_bipartite_graph(
+    # Build language-language graph first to extract language communities
+    language_graph = _build_language_language_graph(
         counts,
-        author_stats,
         language_stats,
-        min_edge_weight=args.min_author_language_weight,
-        top_authors=args.top_authors,
-        top_languages=args.top_languages,
+        min_edge_weight=args.min_language_language_weight,
         centrality_metrics=metrics_without_custom,
-        centralization_scores=centralization_scores,
-        centralization_scores_normalized=centralization_scores_normalized,
-        enable_centrality=author_language_centrality,
-        graph_label="author-language",
+        community_algorithms=language_community_algorithms,
+        enable_communities=language_language_communities,
+        enable_centrality=language_language_centrality,
+        graph_label="language-language",
     )
 
+    # Extract language community assignments from language graph
+    language_communities = {}
+    for node in language_graph.get("nodes", []):
+        node_id = node.get("id")
+        if node_id and "communities" in node and "greedy" in node["communities"]:
+            language_communities[node_id] = node["communities"]["greedy"]
+
+    # Build author-author graph with language community assignments
     author_graph = _build_author_author_graph(
         counts,
         author_stats,
@@ -1011,20 +1033,26 @@ def main() -> None:
         centralization_scores=centralization_scores,
         centralization_scores_normalized=centralization_scores_normalized,
         language_popularity=language_popularity,
+        language_communities=language_communities,
         enable_communities=author_author_communities,
         enable_centrality=author_author_centrality,
         graph_label="author-author",
     )
 
-    language_graph = _build_language_language_graph(
+    # Build author-language graph last
+    bipartite = _build_bipartite_graph(
         counts,
+        author_stats,
         language_stats,
-        min_edge_weight=args.min_language_language_weight,
+        min_edge_weight=args.min_author_language_weight,
+        top_authors=args.top_authors,
+        top_languages=args.top_languages,
         centrality_metrics=metrics_without_custom,
-        community_algorithms=language_community_algorithms,
-        enable_communities=language_language_communities,
-        enable_centrality=language_language_centrality,
-        graph_label="language-language",
+        centralization_scores=centralization_scores,
+        centralization_scores_normalized=centralization_scores_normalized,
+        language_communities=language_communities,
+        enable_centrality=author_language_centrality,
+        graph_label="author-language",
     )
 
     author_lang_path = args.output_dir / "author_language_graph.json"
