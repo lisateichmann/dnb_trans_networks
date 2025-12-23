@@ -229,22 +229,28 @@ def _plot_community_distributions(graphs: Dict[str, Dict], output_dir: Path) -> 
         language_communities = []
         for node in author_graph.get("nodes", []):
             lang_comm = node.get("languageCommunity", -1)
-            if lang_comm >= 0:
+            # Accept any non-negative int or any non-empty string
+            if isinstance(lang_comm, int) and lang_comm >= 0:
+                language_communities.append(str(lang_comm))
+            elif isinstance(lang_comm, str) and lang_comm:
                 language_communities.append(lang_comm)
-        
         if language_communities:
-            unique_comms, counts = np.unique(language_communities, return_counts=True)
-            fig, ax = plt.subplots(figsize=(8, 5))
+            # Count all unique community labels (including multi-community)
+            from collections import Counter
+            comm_counter = Counter(language_communities)
+            unique_comms = list(comm_counter.keys())
+            counts = list(comm_counter.values())
+            fig, ax = plt.subplots(figsize=(10, 5))
             ax.bar(unique_comms, counts, color="steelblue", edgecolor="black", alpha=0.8)
             ax.set_title("Distribution of Authors per Language Community")
             ax.set_xlabel("Language Community")
             ax.set_ylabel("Number of Authors")
             ax.grid(True, linestyle=":", alpha=0.4, axis='y')
-            
             # Add value labels on top of bars
-            for comm, count in zip(unique_comms, counts):
-                ax.text(comm, count, str(count), ha='center', va='bottom')
-            
+            for i, (comm, count) in enumerate(zip(unique_comms, counts)):
+                ax.text(i, count, str(count), ha='center', va='bottom')
+            ax.set_xticks(range(len(unique_comms)))
+            ax.set_xticklabels(unique_comms, rotation=45, ha='right')
             out_path = output_dir / "authors_per_language_community.png"
             fig.tight_layout()
             fig.savefig(out_path, dpi=200)

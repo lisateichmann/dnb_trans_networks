@@ -424,14 +424,19 @@ def _build_bipartite_graph(
     seen_authors = set(edges["author"].unique())
     for author in seen_authors:
         stats = author_stats.loc[author]
-        # Assign author to the language community of their most translated language in this subset
-        author_language_community = -1
-        if language_communities:
-            author_languages = edges[edges["author"] == author].sort_values("weight", ascending=False)
-            if not author_languages.empty:
-                most_translated_language = author_languages.iloc[0]["language"]
-                author_language_community = language_communities.get(most_translated_language, -1)
-        
+        # Assign author to the language community or communities
+        author_languages = edges[edges["author"] == author]["language"].unique()
+        if language_communities and len(author_languages) > 0:
+            comms = {language_communities.get(lang, -1) for lang in author_languages}
+            comms = {str(c) for c in comms if c != -1}
+            if len(comms) == 1:
+                author_language_community = next(iter(comms))
+            elif len(comms) > 1:
+                author_language_community = "->".join(sorted(comms, key=int))
+            else:
+                author_language_community = -1
+        else:
+            author_language_community = -1
         nodes.append(
             {
                 "id": author,
@@ -659,12 +664,19 @@ def _build_author_author_graph(
                 lang_breakdown.items(), key=lambda item: item[1], reverse=True
             )
         ]
-        # Assign author to the language community of their most translated language
-        author_language_community = -1
-        if languages and language_communities:
-            most_translated_language = languages[0]["language"]
-            author_language_community = language_communities.get(most_translated_language, -1)
-        
+        # Assign author to the language community or communities
+        author_languages = [l["language"] for l in languages]
+        if language_communities and len(author_languages) > 0:
+            comms = {language_communities.get(lang, -1) for lang in author_languages}
+            comms = {str(c) for c in comms if c != -1}
+            if len(comms) == 1:
+                author_language_community = next(iter(comms))
+            elif len(comms) > 1:
+                author_language_community = "->".join(sorted(comms, key=int))
+            else:
+                author_language_community = -1
+        else:
+            author_language_community = -1
         nodes.append(
             {
                 "id": author,

@@ -2,64 +2,19 @@ import json
 import csv
 from pathlib import Path
 
-# Read the language-language graph JSON file
-with open('data/language_language_graph.json', 'r', encoding='utf-8') as f:
-    lang_data = json.load(f)
-
-# Extract language nodes data: language, greedy (community id), authorCount
-nodes_data = []
-for node in lang_data['nodes']:
-    nodes_data.append({
-        'language': node['id'],
-        'greedy': node['communities']['greedy'],
-        'authorCount': node['authorCount']
-    })
-
-
-# Ensure the output directory exists
+# Output directory
 output_dir = Path('extracted')
 output_dir.mkdir(exist_ok=True)
-
-# Write language nodes data to CSV
-language_nodes_path = output_dir / 'language_nodes.csv'
-with language_nodes_path.open('w', newline='', encoding='utf-8') as csvfile:
-    fieldnames = ['language', 'greedy', 'authorCount']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(nodes_data)
-
-print(f"Created {language_nodes_path} with {len(nodes_data)} languages")
-
-# Extract language edges data: source language, target language, weight
-edges_data = []
-for edge in lang_data['links']:
-    edges_data.append({
-        'source_language': edge['source'],
-        'target_language': edge['target'],
-        'weight': edge['weight']
-    })
-
-
-# Write language edges data to CSV
-language_edges_path = output_dir / 'language_edges.csv'
-with language_edges_path.open('w', newline='', encoding='utf-8') as csvfile:
-    fieldnames = ['source_language', 'target_language', 'weight']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(edges_data)
-
-print(f"Created {language_edges_path} with {len(edges_data)} edges")
 
 # Read the author-author graph JSON file
 with open('data/author_author_graph.json', 'r', encoding='utf-8') as f:
     author_data = json.load(f)
 
-# Create a mapping of author to their language community
+# Build author to community mapping
 author_to_community = {}
 for node in author_data['nodes']:
     author_id = node['id']
-    language_community = node.get('languageCommunity', -1)
-    author_to_community[author_id] = language_community
+    author_to_community[author_id] = node.get('languageCommunity', -1)
 
 # Extract author edges data with community information
 all_edges = []
@@ -69,7 +24,6 @@ for edge in author_data['links']:
     weight = edge['weight']
     source_community = author_to_community.get(source, -1)
     target_community = author_to_community.get(target, -1)
-    
     all_edges.append({
         'source': source,
         'target': target,
@@ -78,54 +32,65 @@ for edge in author_data['links']:
         'target_community': target_community
     })
 
-# Filter edges for different community combinations
+# Helper: is single community (e.g. '0', '1', '2')
+def is_single_community(val, comm):
+    return str(val) == str(comm)
 
-# 1. Authors in all three communities (0, 1, and 2)
-# For each edge, check if both source and target are in communities 0, 1, or 2
-all_three_communities_edges = [
-    edge for edge in all_edges 
-    if edge['source_community'] in [0, 1, 2] and edge['target_community'] in [0, 1, 2]
-]
+# Helper: is bridge (either source or target has a multi-community label)
+def is_bridge(source, target):
+    return (isinstance(source, str) and '->' in source) or (isinstance(target, str) and '->' in target)
 
-# 2. Authors only in community 0
+# 1. Authors only in community 0
 community_0_edges = [
-    edge for edge in all_edges 
-    if edge['source_community'] == 0 and edge['target_community'] == 0
+    edge for edge in all_edges
+    if is_single_community(edge['source_community'], 0) and is_single_community(edge['target_community'], 0)
 ]
 
-# 3. Authors only in communities 1 or 2
-community_1_2_edges = [
-    edge for edge in all_edges 
-    if edge['source_community'] in [1, 2] and edge['target_community'] in [1, 2]
+# 2. Authors only in community 1
+community_1_edges = [
+    edge for edge in all_edges
+    if is_single_community(edge['source_community'], 1) and is_single_community(edge['target_community'], 1)
+]
+
+# 3. Authors only in community 2
+community_2_edges = [
+    edge for edge in all_edges
+    if is_single_community(edge['source_community'], 2) and is_single_community(edge['target_community'], 2)
+]
+
+# 4. Bridge edges (either source or target is a multi-community author)
+bridge_edges = [
+    edge for edge in all_edges
+    if is_bridge(edge['source_community'], edge['target_community'])
 ]
 
 # Write CSV files
 fieldnames = ['source', 'target', 'weight', 'source_community', 'target_community']
 
-
-# All three communities
-author_edges_all_path = output_dir / 'author_edges_all_communities.csv'
-with author_edges_all_path.open('w', newline='', encoding='utf-8') as csvfile:
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
-    writer.writerows(all_three_communities_edges)
-
-print(f"Created {author_edges_all_path} with {len(all_three_communities_edges)} edges")
-
-# Community 0 only
 author_edges_0_path = output_dir / 'author_edges_community_0.csv'
 with author_edges_0_path.open('w', newline='', encoding='utf-8') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(community_0_edges)
-
 print(f"Created {author_edges_0_path} with {len(community_0_edges)} edges")
 
-# Communities 1 and 2 only
-author_edges_1_2_path = output_dir / 'author_edges_community_1_2.csv'
-with author_edges_1_2_path.open('w', newline='', encoding='utf-8') as csvfile:
+author_edges_1_path = output_dir / 'author_edges_community_1.csv'
+with author_edges_1_path.open('w', newline='', encoding='utf-8') as csvfile:
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
-    writer.writerows(community_1_2_edges)
+    writer.writerows(community_1_edges)
+print(f"Created {author_edges_1_path} with {len(community_1_edges)} edges")
 
-print(f"Created {author_edges_1_2_path} with {len(community_1_2_edges)} edges")
+author_edges_2_path = output_dir / 'author_edges_community_2.csv'
+with author_edges_2_path.open('w', newline='', encoding='utf-8') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(community_2_edges)
+print(f"Created {author_edges_2_path} with {len(community_2_edges)} edges")
+
+author_edges_bridge_path = output_dir / 'author_edges_community_bridges.csv'
+with author_edges_bridge_path.open('w', newline='', encoding='utf-8') as csvfile:
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    writer.writeheader()
+    writer.writerows(bridge_edges)
+print(f"Created {author_edges_bridge_path} with {len(bridge_edges)} edges")
