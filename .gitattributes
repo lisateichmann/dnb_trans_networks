@@ -21,3 +21,11 @@ extracted/author_edges_community_2.csv filter=lfs diff=lfs merge=lfs -text
 plots/tables/author_edges_community_1.md filter=lfs diff=lfs merge=lfs -text
 plots/tables/author_edges_community_2.md filter=lfs diff=lfs merge=lfs -text
 plots/tables/author_edges_community_bridges.md filter=lfs diff=lfs merge=lfs -text
+extracted/author_nodes_community_0.csv filter=lfs diff=lfs merge=lfs -text
+extracted/author_nodes_community_1.csv filter=lfs diff=lfs merge=lfs -text
+extracted/author_nodes_community_2.csv filter=lfs diff=lfs merge=lfs -text
+extracted/author_nodes_community_bridges.csv filter=lfs diff=lfs merge=lfs -text
+plots/tables/author_nodes_community_bridges.md filter=lfs diff=lfs merge=lfs -text
+plots/tables/author_nodes_community_0.md filter=lfs diff=lfs merge=lfs -text
+plots/tables/author_nodes_community_1.md filter=lfs diff=lfs merge=lfs -text
+plots/tables/author_nodes_community_2.md filter=lfs diff=lfs merge=lfs -text
