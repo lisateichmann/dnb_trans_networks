@@ -1,3 +1,4 @@
+// ...imports remain unchanged...
 import {
   renderAuthorLanguageNetwork,
   clearAuthorLanguageFocus,
@@ -22,39 +23,11 @@ let languageFiltered = null;
 let authorAuthorFiltered = null;
 
 
-const authorSlider = document.getElementById("authorMinWeight");
-const authorSliderValue = document.getElementById("authorMinWeightValue");
-const authorAuthorSlider = document.getElementById("authorAuthorMinWeight");
-const authorAuthorSliderValue = document.getElementById("authorAuthorMinWeightValue");
-const languageSlider = document.getElementById("languageMinWeight");
-const languageSliderValue = document.getElementById("languageMinWeightValue");
-const authorDownloadBtn = document.getElementById("downloadAuthorJson");
-const authorAuthorDownloadBtn = document.getElementById("downloadAuthorAuthorJson");
-const languageDownloadBtn = document.getElementById("downloadLanguageJson");
-const authorFocusClearBtn = document.getElementById("authorFocusClear");
-const authorAuthorFocusClearBtn = document.getElementById("authorAuthorFocusClear");
-const communitySelect = document.getElementById("communityAlgorithm");
-const layoutSelect = document.getElementById("layoutMode");
-const clusterSelect = document.getElementById("clusterMode");
-const centralitySelect = document.getElementById("centralityMode");
-
-const histogramRegistry = {
-  author: {
-    containerId: "authorHistogram",
-    slider: authorSlider,
-    getData: () => authorData,
-  },
-  authorAuthor: {
-    containerId: "authorAuthorHistogram",
-    slider: authorAuthorSlider,
-    getData: () => authorAuthorData,
-  },
-  language: {
-    containerId: "languageHistogram",
-    slider: languageSlider,
-    getData: () => languageData,
-  },
-};
+let authorSlider, authorSliderValue, authorAuthorSlider, authorAuthorSliderValue, languageSlider, languageSliderValue;
+let authorDownloadBtn, authorAuthorDownloadBtn, languageDownloadBtn;
+let authorFocusClearBtn, authorAuthorFocusClearBtn;
+let communitySelect, layoutSelect, clusterSelect, centralitySelect;
+let histogramRegistry;
 
 const histogramState = new Map();
 
@@ -248,80 +221,69 @@ function renderAuthorAuthor() {
 }
 
 
-function updateNetworkMetadata() {
+
+function renderNetworkMetadata() {
   const metadataSection = document.getElementById("networkMetadata");
-  const grid = metadataSection?.querySelector(".metadata-grid");
-  if (metadataSection) metadataSection.style.display = "block";
+  const grid = document.getElementById("metadataGrid");
+  console.log("[renderNetworkMetadata] called", { metadataSection, grid, authorAuthorData });
 
-  // Success: hide loading, show grid
-  if (loadingMsg) loadingMsg.style.display = "none";
-  if (grid) grid.style.display = "grid";
-
-  // Get DOM elements
-  const modularityEl = document.getElementById("modularityScore");
-  const avgDegreeEl = document.getElementById("averageDegree");
-  const numAuthorsEl = document.getElementById("numAuthors");
-  const numLanguagesEl = document.getElementById("numLanguages");
-  const numRelationshipsEl = document.getElementById("numRelationships");
-  if (!authorAuthorData) return;
-  // Modularity
-  let modularity = authorAuthorData?.meta?.modularity;
-  modularityEl.textContent = (typeof modularity === "number") ? modularity.toFixed(3) : "–";
-  // Authors
-  const nodes = authorAuthorData.nodes || [];
-  numAuthorsEl.textContent = nodes.length || "–";
-  // Relationships (edges)
-  const links = authorAuthorData.links || [];
-  numRelationshipsEl.textContent = links.length || "–";
-  // Average degree (use degreeCentrality if available)
-  let avgDegree = 0;
-  if (nodes.length) {
-    if (nodes[0] && typeof nodes[0].degreeCentrality === "number") {
-      avgDegree = nodes.reduce((sum, n) => sum + (n.degreeCentrality || 0), 0) / nodes.length;
-    } else if (links.length) {
-      avgDegree = (2 * links.length) / nodes.length;
+  let modularity = "–", avgDegree = "–", numAuthors = "–", numLanguages = "–", numRelationships = "–";
+  if (authorAuthorData) {
+    modularity = (typeof authorAuthorData?.meta?.modularity === "number") ? authorAuthorData.meta.modularity.toFixed(3) : "–";
+    const nodes = authorAuthorData.nodes || [];
+    numAuthors = nodes.length || "–";
+    const links = authorAuthorData.links || [];
+    numRelationships = links.length || "–";
+    if (nodes.length) {
+      if (nodes[0] && typeof nodes[0].degreeCentrality === "number") {
+        avgDegree = (nodes.reduce((sum, n) => sum + (n.degreeCentrality || 0), 0) / nodes.length).toFixed(2);
+      } else if (links.length) {
+        avgDegree = ((2 * links.length) / nodes.length).toFixed(2);
+      }
     }
+    const langSet = new Set();
+    nodes.forEach((n) => {
+      if (n.language) langSet.add(n.language);
+      if (Array.isArray(n.languages)) n.languages.forEach((l) => langSet.add(l));
+    });
+    numLanguages = langSet.size || "–";
   }
-  avgDegreeEl.textContent = avgDegree ? avgDegree.toFixed(2) : "–";
-  // Languages (unique from nodes)
-  const langSet = new Set();
-  nodes.forEach((n) => {
-    if (n.language) langSet.add(n.language);
-    if (Array.isArray(n.languages)) n.languages.forEach((l) => langSet.add(l));
-  });
-  numLanguagesEl.textContent = langSet.size || "–";
+  if (grid) {
+    grid.innerHTML = `
+      <div><strong>Modularity:</strong> <span>${modularity}</span></div>
+      <div><strong>Average Degree:</strong> <span>${avgDegree}</span></div>
+      <div><strong>Authors:</strong> <span>${numAuthors}</span></div>
+      <div><strong>Languages:</strong> <span>${numLanguages}</span></div>
+      <div><strong>Author Relationships:</strong> <span>${numRelationships}</span></div>
+    `;
+    grid.style.display = "grid";
+  } else if (metadataSection) {
+    metadataSection.innerHTML += '<div style="color:red">[Error] Metadata grid not found in DOM</div>';
+  } else {
+    document.body.innerHTML += '<div style="color:red">[Error] Network metadata section not found in DOM</div>';
+  }
 }
+
 
 async function init() {
   try {
     const [authorJson, languageJson, authorAuthorJson] = await Promise.all([
-      fetch(AUTHOR_DATA_URL).then((res) => {
-        if (!res.ok) throw new Error(`Failed to load ${AUTHOR_DATA_URL}`);
-        return res.json();
-      }),
-      fetch(LANGUAGE_DATA_URL).then((res) => {
-        if (!res.ok) throw new Error(`Failed to load ${LANGUAGE_DATA_URL}`);
-        return res.json();
-      }),
-      fetch(AUTHOR_AUTHOR_DATA_URL).then((res) => {
-        if (!res.ok) throw new Error(`Failed to load ${AUTHOR_AUTHOR_DATA_URL}`);
-        return res.json();
-      }),
+        fetch(AUTHOR_DATA_URL).then((res) => res.json()),
+        fetch(LANGUAGE_DATA_URL).then((res) => res.json()),
+        fetch(AUTHOR_AUTHOR_DATA_URL).then((res) => res.json()),
     ]);
 
     authorData = authorJson;
     languageData = languageJson;
     authorAuthorData = authorAuthorJson;
     
-    console.log("Data loaded:", { authorData, languageData, authorAuthorData });
-
     updateSliderRange(authorSlider, authorData?.meta?.maxEdgeWeight ?? authorData?.maxWeight ?? 40);
     updateSliderRange(languageSlider, languageData?.meta?.maxEdgeWeight ?? languageData?.maxWeight ?? 200);
     updateSliderRange(
       authorAuthorSlider,
       authorAuthorData?.meta?.maxEdgeWeight ?? authorAuthorData?.maxWeight ?? 15
     );
-    updateNetworkMetadata();
+    renderNetworkMetadata();
     populateCentralityOptions(authorAuthorData?.meta?.centralityMetrics ?? []);
     renderHistograms();
     renderAuthor();
@@ -342,49 +304,87 @@ async function init() {
   }
 }
 
-authorSlider.addEventListener("input", renderAuthor);
-languageSlider.addEventListener("input", renderLanguage);
-authorAuthorSlider.addEventListener("input", renderAuthorAuthor);
-communitySelect.addEventListener("change", renderAuthorAuthor);
-layoutSelect?.addEventListener("change", () => {
-  renderAuthor();
-  renderLanguage();
-  renderAuthorAuthor();
-});
-clusterSelect?.addEventListener("change", renderAuthorAuthor);
-centralitySelect?.addEventListener("change", renderAuthorAuthor);
+document.addEventListener('DOMContentLoaded', () => {
+  // Query all DOM elements here
+  authorSlider = document.getElementById("authorMinWeight");
+  authorSliderValue = document.getElementById("authorMinWeightValue");
+  authorAuthorSlider = document.getElementById("authorAuthorMinWeight");
+  authorAuthorSliderValue = document.getElementById("authorAuthorMinWeightValue");
+  languageSlider = document.getElementById("languageMinWeight");
+  languageSliderValue = document.getElementById("languageMinWeightValue");
+  authorDownloadBtn = document.getElementById("downloadAuthorJson");
+  authorAuthorDownloadBtn = document.getElementById("downloadAuthorAuthorJson");
+  languageDownloadBtn = document.getElementById("downloadLanguageJson");
+  authorFocusClearBtn = document.getElementById("authorFocusClear");
+  authorAuthorFocusClearBtn = document.getElementById("authorAuthorFocusClear");
+  communitySelect = document.getElementById("communityAlgorithm");
+  layoutSelect = document.getElementById("layoutMode");
+  clusterSelect = document.getElementById("clusterMode");
+  centralitySelect = document.getElementById("centralityMode");
 
-authorDownloadBtn.addEventListener("click", () => {
-  if (authorFiltered) {
-    downloadJSON("author_language_filtered.json", authorFiltered);
-  }
-});
+  histogramRegistry = {
+    author: {
+      containerId: "authorHistogram",
+      slider: authorSlider,
+      getData: () => authorData,
+    },
+    authorAuthor: {
+      containerId: "authorAuthorHistogram",
+      slider: authorAuthorSlider,
+      getData: () => authorAuthorData,
+    },
+    language: {
+      containerId: "languageHistogram",
+      slider: languageSlider,
+      getData: () => languageData,
+    },
+  };
 
-authorFocusClearBtn?.addEventListener("click", () => {
-  clearAuthorLanguageFocus("#authorLanguageChart");
-});
+  authorSlider.addEventListener("input", renderAuthor);
+  languageSlider.addEventListener("input", renderLanguage);
+  authorAuthorSlider.addEventListener("input", renderAuthorAuthor);
+  communitySelect.addEventListener("change", renderAuthorAuthor);
+  layoutSelect?.addEventListener("change", () => {
+    renderAuthor();
+    renderLanguage();
+    renderAuthorAuthor();
+  });
+  clusterSelect?.addEventListener("change", renderAuthorAuthor);
+  centralitySelect?.addEventListener("change", renderAuthorAuthor);
 
-authorAuthorDownloadBtn.addEventListener("click", () => {
-  if (authorAuthorFiltered) {
-    downloadJSON("author_author_filtered.json", authorAuthorFiltered);
-  }
-});
+  authorDownloadBtn.addEventListener("click", () => {
+    if (authorFiltered) {
+      downloadJSON("author_language_filtered.json", authorFiltered);
+    }
+  });
 
-authorAuthorFocusClearBtn?.addEventListener("click", () => {
-  clearAuthorAuthorFocus("#authorAuthorChart");
-});
+  authorFocusClearBtn?.addEventListener("click", () => {
+    clearAuthorLanguageFocus("#authorLanguageChart");
+  });
 
-languageDownloadBtn.addEventListener("click", () => {
-  if (languageFiltered) {
-    downloadJSON("language_language_filtered.json", languageFiltered);
-  }
-});
+  authorAuthorDownloadBtn.addEventListener("click", () => {
+    if (authorAuthorFiltered) {
+      downloadJSON("author_author_filtered.json", authorAuthorFiltered);
+    }
+  });
 
-window.addEventListener("resize", () => {
-  renderAuthor();
-  renderLanguage();
-  renderAuthorAuthor();
-  renderHistograms();
-});
+  authorAuthorFocusClearBtn?.addEventListener("click", () => {
+    clearAuthorAuthorFocus("#authorAuthorChart");
+  });
 
-init();
+  languageDownloadBtn.addEventListener("click", () => {
+    if (languageFiltered) {
+      downloadJSON("language_language_filtered.json", languageFiltered);
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    renderAuthor();
+    renderLanguage();
+    renderAuthorAuthor();
+    renderHistograms();
+  });
+
+  // Ensure init runs after DOM is ready and all variables are set
+  init();
+});

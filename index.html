@@ -4,9 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Author Communities & Centrality Rings</title>
-    <link rel="stylesheet" href="./src/styles.css" />
     <script src="https://d3js.org/d3.v7.min.js" defer></script>
-    <script type="module" src="./main.js" defer></script>
+    <!-- <script type="module" src="./main.js" defer></script> -->
   </head>
   <body>
     <header>
@@ -14,13 +13,7 @@
         <h1>Author Communities & Centrality Rings</h1>
         <div id="networkMetadata" class="network-metadata">
           <h2>Network Summary</h2>
-          <div class="metadata-grid" style="display:none">
-            <div><strong>Modularity:</strong> <span id="modularityScore">–</span></div>
-            <div><strong>Average Degree:</strong> <span id="averageDegree">–</span></div>
-            <div><strong>Authors:</strong> <span id="numAuthors">–</span></div>
-            <div><strong>Languages:</strong> <span id="numLanguages">–</span></div>
-            <div><strong>Author Relationships:</strong> <span id="numRelationships">–</span></div>
-          </div>
+          <div class="metadata-grid" id="metadataGrid"></div>
         </div>
         <p>
           Authors are colored by their detected community and positioned in concentric rings
