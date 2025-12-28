@@ -114,7 +114,7 @@ This creates:
 | `--min-language-language-weight` | Minimum shared-author weight to keep a language↔language edge (`0` keeps all). | `0` |
 | `--top-authors` | Cap on most translated authors (`0` keeps all). | `0` |
 | `--top-languages` | Cap on destination languages (`0` keeps all). | `0` |
-| `--community-algorithms` | Comma list of `louvain`, `leiden`, `infomap` for the author-author graph. Omit or pass `none` to skip. | _not set_ (skip) |
+| `--community-algorithms` | Comma list of `louvain`, `leiden`, `infomap`, `greedy` for the author-author graph. Omit or pass `none` to skip. | _not set_ (skip) |
 | `--language-community-algorithms` | Currently only `greedy` for the language-language graph. Omit/`none` to skip. | _not set_ (skip) |
 | `--community-targets` | Graphs that should run their community algorithms (`author-language`, `author-author`, `language-language`, `all`). | _not set_ (skip all) |
 | `--centrality-metrics` | Comma list of `degree`, `closeness`, `betweenness`, `eigenvector`, `languageCentral`. Omit/`none` to skip. (`languageCentral` only applies to the author↔author graph.) | _not set_ (skip) |

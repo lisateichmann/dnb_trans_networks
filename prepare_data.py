@@ -566,85 +566,97 @@ def _build_author_author_graph(
     centrality_tiers: Dict[str, Dict[str, str]] = {}
 
     if graph.number_of_edges() > 0 and graph.number_of_nodes() > 0:
-        if enable_communities:
-            if not community_algorithms:
-                log("Skipping community detection (no algorithms specified).")
-            else:
-                if "louvain" in community_algorithms:
-                    log("Running Louvain community detection…")
-                    start = perf_counter()
-                    louvain_parts = louvain_communities(graph, weight="weight")
-                    elapsed = perf_counter() - start
-                    communities_summary["louvain"] = [sorted(list(c)) for c in louvain_parts]
-                    community_assignments["louvain"] = {}
-                    for idx, community_nodes in enumerate(louvain_parts):
-                        for node in community_nodes:
-                            community_assignments["louvain"][node] = idx
-                    log(f"Louvain detected {len(louvain_parts)} communities in {elapsed:.2f}s")
-
-                if "leiden" in community_algorithms:
-                    log("Running Leiden community detection…")
-                    start = perf_counter()
-                    leiden_map = _run_leiden(graph)
-                    elapsed = perf_counter() - start
-                    if leiden_map:
-                        community_assignments["leiden"] = leiden_map
-                        summary: Dict[int, List[str]] = defaultdict(list)
-                        for node, community_id in leiden_map.items():
-                            summary[community_id].append(node)
-                        communities_summary["leiden"] = [sorted(nodes) for nodes in summary.values()]
-                        log(f"Leiden detected {len(summary)} communities in {elapsed:.2f}s")
-                    else:
-                        log("Leiden community detection returned no assignments.")
-
-                if "infomap" in community_algorithms:
-                    log("Running Infomap community detection…")
-                    start = perf_counter()
-                    infomap_map = _run_infomap(graph)
-                    elapsed = perf_counter() - start
-                    if infomap_map:
-                        community_assignments["infomap"] = infomap_map
-                        summary: Dict[int, List[str]] = defaultdict(list)
-                        for node, community_id in infomap_map.items():
-                            summary[community_id].append(node)
-                        communities_summary["infomap"] = [sorted(nodes) for nodes in summary.values()]
-                        log(f"Infomap detected {len(summary)} communities in {elapsed:.2f}s")
-                    else:
-                        log("Infomap community detection returned no assignments.")
-        else:
-            log("Skipping community detection (graph not targeted).")
-
-        requested_metrics = list(centrality_metrics or [])
-        custom_language_metric = "languagecentral" in requested_metrics
-        metrics = [metric for metric in requested_metrics if metric != "languagecentral"]
-        if enable_centrality:
-            if not metrics and not custom_language_metric:
-                log("Skipping centrality metrics (no metrics specified).")
-            else:
-                if metrics:
-                    log("Computing centrality metrics for author-author graph…")
-                    centrality_scores = _compute_centrality_scores(graph, metrics, log_func=log)
-                    if centrality_scores:
-                        log("Centrality metrics ready: " + ", ".join(sorted(centrality_scores.keys())))
+            if enable_communities:
+                if not community_algorithms:
+                    log("Skipping community detection (no algorithms specified).")
                 else:
-                    log("No standard centrality metrics requested (languageCentral only).")
-                if custom_language_metric:
-                    log("Injecting languageCentral metric from percentage-weighted language mixes…")
-                    lc_scores = {
-                        author: float((centralization_scores or {}).get(author, 0.0))
-                        for author in seen_authors
-                    }
-                    centrality_scores["languagecentral"] = lc_scores
-                if centrality_scores:
-                    centrality_tiers = _assign_centrality_tiers(centrality_scores)
-                    if centrality_tiers:
-                        log(
-                            "Centrality tiers assigned for metrics: "
-                            + ", ".join(sorted(centrality_tiers.keys()))
-                        )
-        else:
-            log("Skipping centrality metrics (graph not targeted).")
+                    if "greedy" in community_algorithms:
+                        log("Running greedy modularity community detection for author-author graph…")
+                        start = perf_counter()
+                        greedy_parts = greedy_modularity_communities(graph, weight="weight", resolution=1.05, best_n=3)
+                        cluster_modularity = nx.community.modularity(graph, greedy_parts)
+                        elapsed = perf_counter() - start
+                        communities_summary["greedy"] = [sorted(list(c)) for c in greedy_parts]
+                        community_assignments["greedy"] = {}
+                        for idx, community_nodes in enumerate(greedy_parts):
+                            for node in community_nodes:
+                                community_assignments["greedy"][node] = idx
+                        log(f"Greedy modularity detected {len(greedy_parts)} communities in {elapsed:.2f}s")
+                        log(f"Modularity score: {cluster_modularity:.4f}")
+                    if "louvain" in community_algorithms:
+                        log("Running Louvain community detection…")
+                        start = perf_counter()
+                        louvain_parts = louvain_communities(graph, weight="weight")
+                        elapsed = perf_counter() - start
+                        communities_summary["louvain"] = [sorted(list(c)) for c in louvain_parts]
+                        community_assignments["louvain"] = {}
+                        for idx, community_nodes in enumerate(louvain_parts):
+                            for node in community_nodes:
+                                community_assignments["louvain"][node] = idx
+                        log(f"Louvain detected {len(louvain_parts)} communities in {elapsed:.2f}s")
+                    if "leiden" in community_algorithms:
+                        log("Running Leiden community detection…")
+                        start = perf_counter()
+                        leiden_map = _run_leiden(graph)
+                        elapsed = perf_counter() - start
+                        if leiden_map:
+                            community_assignments["leiden"] = leiden_map
+                            summary: Dict[int, List[str]] = defaultdict(list)
+                            for node, community_id in leiden_map.items():
+                                summary[community_id].append(node)
+                            communities_summary["leiden"] = [sorted(nodes) for nodes in summary.values()]
+                            log(f"Leiden detected {len(summary)} communities in {elapsed:.2f}s")
+                        else:
+                            log("Leiden community detection returned no assignments.")
+                    if "infomap" in community_algorithms:
+                        log("Running Infomap community detection…")
+                        start = perf_counter()
+                        infomap_map = _run_infomap(graph)
+                        elapsed = perf_counter() - start
+                        if infomap_map:
+                            community_assignments["infomap"] = infomap_map
+                            summary: Dict[int, List[str]] = defaultdict(list)
+                            for node, community_id in infomap_map.items():
+                                summary[community_id].append(node)
+                            communities_summary["infomap"] = [sorted(nodes) for nodes in summary.values()]
+                            log(f"Infomap detected {len(summary)} communities in {elapsed:.2f}s")
+                        else:
+                            log("Infomap community detection returned no assignments.")
     else:
+        log("Skipping community detection (graph not targeted).")
+
+    requested_metrics = list(centrality_metrics or [])
+    custom_language_metric = "languagecentral" in requested_metrics
+    metrics = [metric for metric in requested_metrics if metric != "languagecentral"]
+    if enable_centrality:
+        if not metrics and not custom_language_metric:
+            log("Skipping centrality metrics (no metrics specified).")
+        else:
+            if metrics:
+                log("Computing centrality metrics for author-author graph…")
+                centrality_scores = _compute_centrality_scores(graph, metrics, log_func=log)
+                if centrality_scores:
+                    log("Centrality metrics ready: " + ", ".join(sorted(centrality_scores.keys())))
+            else:
+                log("No standard centrality metrics requested (languageCentral only).")
+            if custom_language_metric:
+                log("Injecting languageCentral metric from percentage-weighted language mixes…")
+                lc_scores = {
+                    author: float((centralization_scores or {}).get(author, 0.0))
+                    for author in seen_authors
+                }
+                centrality_scores["languagecentral"] = lc_scores
+            if centrality_scores:
+                centrality_tiers = _assign_centrality_tiers(centrality_scores)
+                if centrality_tiers:
+                    log(
+                        "Centrality tiers assigned for metrics: "
+                        + ", ".join(sorted(centrality_tiers.keys()))
+                    )
+    else:
+        log("Skipping centrality metrics (graph not targeted).")
+
+    if graph.number_of_edges() == 0 or graph.number_of_nodes() == 0:
         # Graphs with zero edges cannot produce communities/centrality; keep metadata empty.
         communities_summary = {alg: [] for alg in community_algorithms}
         centrality_scores = {}
@@ -724,6 +736,16 @@ def _build_author_author_graph(
         "communityAlgorithms": community_algorithms,
         "centralityMetrics": sorted(centrality_scores.keys()),
     }
+    # Save modularity score for greedy if computed
+    greedy_modularity = None
+    if "greedy" in communities_summary and "greedy" in community_assignments and "greedy" in community_algorithms:
+        # Find modularity score from log or calculation
+        try:
+            greedy_modularity = cluster_modularity
+        except Exception:
+            greedy_modularity = None
+    if greedy_modularity is not None:
+        meta["greedyModularity"] = greedy_modularity
     if language_popularity:
         meta["languagePopularity"] = {
             "ratios": language_popularity,
@@ -790,7 +812,8 @@ def _build_language_language_graph(
         if "greedy" in language_community_algorithms:
             log("Running greedy modularity community detection for language-language graph…")
             start = perf_counter()
-            greedy_parts = greedy_modularity_communities(graph, weight="weight", resolution=1.05, best_n=3) # 
+            greedy_parts = greedy_modularity_communities(graph, weight="weight", resolution=1.05, best_n=3) 
+            cluster_modularity = nx.community.modularity(graph, greedy_parts)    
             elapsed = perf_counter() - start
             communities_summary["greedy"] = [sorted(list(c)) for c in greedy_parts]
             community_assignments["greedy"] = {}
@@ -798,6 +821,7 @@ def _build_language_language_graph(
                 for node in community_nodes:
                     community_assignments["greedy"][node] = idx
             log(f"Greedy modularity detected {len(greedy_parts)} communities in {elapsed:.2f}s")
+            log(f"Modularity score: {cluster_modularity:.4f}")
         elif language_community_algorithms:
             log("Skipping language-language community detection (unsupported algorithm requested).")
         else:
@@ -876,6 +900,15 @@ def _build_language_language_graph(
             alg: len(groups)
             for alg, groups in communities_summary.items()
         }
+    # Save modularity score for greedy if computed
+    greedy_modularity = None
+    if "greedy" in communities_summary and "greedy" in community_assignments and "greedy" in language_community_algorithms:
+        try:
+            greedy_modularity = cluster_modularity
+        except Exception:
+            greedy_modularity = None
+    if greedy_modularity is not None:
+        meta["greedyModularity"] = greedy_modularity
 
     result = {
         "meta": meta,
