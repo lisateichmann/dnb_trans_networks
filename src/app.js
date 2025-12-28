@@ -1,17 +1,18 @@
 import {
   renderAuthorLanguageNetwork,
   clearAuthorLanguageFocus,
-} from "./authorLanguage.js?v=20241119";
+} from "./authorLanguage.js";
 import {
   renderAuthorAuthorNetwork,
   clearAuthorAuthorFocus,
-} from "./authorAuthor.js?v=20241119";
-import { renderLanguageLanguageNetwork } from "./languageLanguage.js?v=20241119";
+} from "./authorAuthor.js";
+import { renderLanguageLanguageNetwork } from "./languageLanguage.js";
 import { downloadJSON } from "./utils.js";
 
 const AUTHOR_DATA_URL = "./data/author_language_graph.json";
 const LANGUAGE_DATA_URL = "./data/language_language_graph.json";
 const AUTHOR_AUTHOR_DATA_URL = "./data/author_author_graph.json";
+
 
 let authorData = null;
 let languageData = null;
@@ -19,6 +20,7 @@ let authorAuthorData = null;
 let authorFiltered = null;
 let languageFiltered = null;
 let authorAuthorFiltered = null;
+
 
 const authorSlider = document.getElementById("authorMinWeight");
 const authorSliderValue = document.getElementById("authorMinWeightValue");
@@ -226,14 +228,68 @@ function renderAuthorAuthor() {
   updateHistogramThreshold("authorAuthor", minWeight);
   const communityAlgorithm = communitySelect.value;
   const centralityMetric = centralitySelect?.value || "none";
+  const showEdgesToggle = document.getElementById("showEdgesToggle");
+  const showEdges = showEdgesToggle ? showEdgesToggle.checked : false;
   authorAuthorFiltered = renderAuthorAuthorNetwork("#authorAuthorChart", authorAuthorData, {
     minWeight,
     communityAlgorithm,
     layout: getLayoutMode(),
     clusterMode: getClusterMode(),
     centralityMetric,
+    showEdges,
     onFocusChange: handleAuthorAuthorFocusChange,
   });
+
+  // Listen for toggle changes
+  if (showEdgesToggle && !showEdgesToggle._listenerSet) {
+    showEdgesToggle.addEventListener("change", renderAuthorAuthor);
+    showEdgesToggle._listenerSet = true;
+  }
+}
+
+
+function updateNetworkMetadata() {
+  const metadataSection = document.getElementById("networkMetadata");
+  const grid = metadataSection?.querySelector(".metadata-grid");
+  if (metadataSection) metadataSection.style.display = "block";
+
+  // Success: hide loading, show grid
+  if (loadingMsg) loadingMsg.style.display = "none";
+  if (grid) grid.style.display = "grid";
+
+  // Get DOM elements
+  const modularityEl = document.getElementById("modularityScore");
+  const avgDegreeEl = document.getElementById("averageDegree");
+  const numAuthorsEl = document.getElementById("numAuthors");
+  const numLanguagesEl = document.getElementById("numLanguages");
+  const numRelationshipsEl = document.getElementById("numRelationships");
+  if (!authorAuthorData) return;
+  // Modularity
+  let modularity = authorAuthorData?.meta?.modularity;
+  modularityEl.textContent = (typeof modularity === "number") ? modularity.toFixed(3) : "–";
+  // Authors
+  const nodes = authorAuthorData.nodes || [];
+  numAuthorsEl.textContent = nodes.length || "–";
+  // Relationships (edges)
+  const links = authorAuthorData.links || [];
+  numRelationshipsEl.textContent = links.length || "–";
+  // Average degree (use degreeCentrality if available)
+  let avgDegree = 0;
+  if (nodes.length) {
+    if (nodes[0] && typeof nodes[0].degreeCentrality === "number") {
+      avgDegree = nodes.reduce((sum, n) => sum + (n.degreeCentrality || 0), 0) / nodes.length;
+    } else if (links.length) {
+      avgDegree = (2 * links.length) / nodes.length;
+    }
+  }
+  avgDegreeEl.textContent = avgDegree ? avgDegree.toFixed(2) : "–";
+  // Languages (unique from nodes)
+  const langSet = new Set();
+  nodes.forEach((n) => {
+    if (n.language) langSet.add(n.language);
+    if (Array.isArray(n.languages)) n.languages.forEach((l) => langSet.add(l));
+  });
+  numLanguagesEl.textContent = langSet.size || "–";
 }
 
 async function init() {
@@ -256,12 +312,16 @@ async function init() {
     authorData = authorJson;
     languageData = languageJson;
     authorAuthorData = authorAuthorJson;
+    
+    console.log("Data loaded:", { authorData, languageData, authorAuthorData });
+
     updateSliderRange(authorSlider, authorData?.meta?.maxEdgeWeight ?? authorData?.maxWeight ?? 40);
     updateSliderRange(languageSlider, languageData?.meta?.maxEdgeWeight ?? languageData?.maxWeight ?? 200);
     updateSliderRange(
       authorAuthorSlider,
       authorAuthorData?.meta?.maxEdgeWeight ?? authorAuthorData?.maxWeight ?? 15
     );
+    updateNetworkMetadata();
     populateCentralityOptions(authorAuthorData?.meta?.centralityMetrics ?? []);
     renderHistograms();
     renderAuthor();
@@ -269,6 +329,7 @@ async function init() {
     renderAuthorAuthor();
   } catch (error) {
     console.error(error);
+    // Also show the main error banner
     const main = document.querySelector("main");
     const banner = document.createElement("div");
     banner.style.background = "#fee2e2";

@@ -134,19 +134,70 @@ function buildAuthorAuthorState(container, data, config) {
   const radiusScale = d3.scaleSqrt().domain([1, maxWeight]).range([3, 18]);
   const maxLinkWeight = d3.max(links, (d) => d.weight) || 1;
 
-  const simulation = d3
-    .forceSimulation(nodes)
-    .force(
-      "link",
-      d3
-        .forceLink(links)
-        .id((d) => d.id)
-        .distance((d) => 220 - Math.min(d.weight * 3, 140))
-        .strength((d) => Math.min(0.05 + d.weight / 80, 0.5))
-    )
-    .force("charge", d3.forceManyBody().strength(-110))
-    .force("center", d3.forceCenter(config.width / 2, config.height / 2))
-    .force("collision", d3.forceCollide().radius((d) => radiusScale(d.totalWeight) + 6));
+  // --- Hybrid Ring Layout ---
+  // 1. Assign nodes to rings by languageCommunity (0=core, 1=periphery, 2=outer)
+  // 2. Sort within ring by languageCentralization (descending)
+  // 3. Place nodes at angular positions around the ring
+  // 4. Apply gentle force to reduce overlap
+
+  // Ring radii
+  const minSide = Math.min(config.width, config.height);
+  const maxRadius = Math.max(140, minSide / 2 - 30);
+  const peripheryRadius = maxRadius * 0.72;
+  const coreRadius = peripheryRadius * 0.6;
+  const ringRadii = [coreRadius, peripheryRadius, maxRadius];
+  const centerX = config.width / 2;
+  const centerY = config.height / 2;
+
+  // Group nodes by languageCommunity
+  const ringGroups = [[], [], []];
+  nodes.forEach((node) => {
+    const comm = node.languageCommunity ?? 2;
+    ringGroups[comm].push(node);
+  });
+
+  // Sort each ring by languageCentralization (descending)
+  ringGroups.forEach((group) => {
+    group.sort((a, b) => (b.languageCentralization ?? 0) - (a.languageCentralization ?? 0));
+  });
+
+  // Assign initial positions
+  ringGroups.forEach((group, ringIdx) => {
+    const radius = ringRadii[ringIdx];
+    const n = group.length;
+    group.forEach((node, i) => {
+      // Higher centralization closer to 0 angle
+      const angle = (2 * Math.PI * i) / n;
+      node.x = centerX + radius * Math.cos(angle);
+      node.y = centerY + radius * Math.sin(angle);
+    });
+  });
+
+  // Gentle force simulation to reduce overlap, but keep nodes near their ring/angle
+  const simulation = d3.forceSimulation(nodes)
+    .force("x", d3.forceX((d) => {
+      const comm = d.languageCommunity ?? 2;
+      const idx = ringGroups[comm].indexOf(d);
+      const n = ringGroups[comm].length;
+      const angle = (2 * Math.PI * idx) / n;
+      return centerX + ringRadii[comm] * Math.cos(angle);
+    }).strength(0.18))
+    .force("y", d3.forceY((d) => {
+      const comm = d.languageCommunity ?? 2;
+      const idx = ringGroups[comm].indexOf(d);
+      const n = ringGroups[comm].length;
+      const angle = (2 * Math.PI * idx) / n;
+      return centerY + ringRadii[comm] * Math.sin(angle);
+    }).strength(0.18))
+    .force("collision", d3.forceCollide().radius((d) => radiusScale(d.totalWeight) + 7).strength(0.9))
+    .alpha(0.7)
+    .stop();
+
+  // Run a fixed number of ticks for static layout
+  const iterations = Math.min(MAX_STATIC_TICKS, Math.max(120, Math.round(nodes.length * 0.7)));
+  for (let i = 0; i < iterations; i += 1) {
+    simulation.tick();
+  }
 
   const state = {
     canvas,
@@ -175,20 +226,10 @@ function buildAuthorAuthorState(container, data, config) {
     centralityMetric: config.centralityMetric && config.centralityMetric !== "none" ? config.centralityMetric : null,
     availableCentralityMetrics: config.availableCentralityMetrics || [],
     centralityBands: null,
+    showEdges: false,
   };
 
-  applyClusterForce(state, config.clusterCommunityKey);
-
-  if (config.layoutMode === "static") {
-    simulation.stop();
-    const iterations = Math.min(MAX_STATIC_TICKS, Math.max(150, Math.round(nodes.length * 0.8)));
-    for (let i = 0; i < iterations; i += 1) {
-      simulation.tick();
-    }
-  } else {
-    simulation.on("tick", () => drawScene(state));
-  }
-
+  // No cluster force or animated layout for hybrid ring layout
   setupAuthorAuthorZoom(state);
   setupPointerEvents(state);
   return state;
@@ -447,17 +488,19 @@ function drawScene(state) {
   }
 
   const zoomScale = state.transform.k || 1;
-  ctx.strokeStyle = "rgba(148,163,184,0.25)";
-  state.links.forEach((link) => {
-    if (!isLinkRenderable(state, link)) return;
-    ctx.globalAlpha = 0.35;
-    const lineWidth = (0.2 + (link.weight / state.maxLinkWeight) * 2.2) / zoomScale;
-    ctx.lineWidth = Math.max(0.15, lineWidth);
-    ctx.beginPath();
-    ctx.moveTo(link.source.x, link.source.y);
-    ctx.lineTo(link.target.x, link.target.y);
-    ctx.stroke();
-  });
+  if (state.showEdges) {
+    ctx.strokeStyle = "rgba(148,163,184,0.25)";
+    state.links.forEach((link) => {
+      if (!isLinkRenderable(state, link)) return;
+      ctx.globalAlpha = 0.35;
+      const lineWidth = (0.2 + (link.weight / state.maxLinkWeight) * 2.2) / zoomScale;
+      ctx.lineWidth = Math.max(0.15, lineWidth);
+      ctx.beginPath();
+      ctx.moveTo(link.source.x, link.source.y);
+      ctx.lineTo(link.target.x, link.target.y);
+      ctx.stroke();
+    });
+  }
 
   ctx.globalAlpha = 1;
   ctx.font = "9px 'Segoe UI', sans-serif";

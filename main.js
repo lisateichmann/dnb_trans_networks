@@ -1,4 +1,5 @@
-import { createTooltip, showTooltip, hideTooltip, formatNumber } from "../src/utils.js?v=20241119";
+import './src/app.js';
+import { createTooltip, showTooltip, hideTooltip, formatNumber } from "../src/utils.js";
 
 const DATA_URL = new URL("../data/author_author_graph.json", import.meta.url).href;
 const LANGUAGE_CSV_URL = new URL("../data.csv", import.meta.url).href;
@@ -18,12 +19,6 @@ const COMMUNITY_COLORS = [
   "#4ade80",
   "#a5b4fc",
 ];
-
-const CENTRALITY_TIER_COLORS = {
-  outer: "rgba(15,23,42,0.6)",
-  periphery: "rgba(59,130,246,0.35)",
-  central: "rgba(253,224,71,0.45)",
-};
 
 const CENTRALITY_TIER_ORDER = ["outer", "periphery", "central"];
 const MIN_TIER_BAND_RATIO = 0.12;
