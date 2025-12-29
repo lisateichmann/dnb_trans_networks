@@ -90,6 +90,13 @@
           Clear All
         </button>
       </div>
+      <div class="cluster-filter-bar">
+        <div class="cluster-filter-bar-header">
+          <h2>Cluster language filter</h2>
+          <span class="cluster-filter-desc">Select a community to filter the graph.</span>
+        </div>
+        <div id="clusterLanguageFilter" class="cluster-filter-grid"></div>
+      </div>
       <div class="cluster-layout-wrapper">
         <section class="panel">
           <div class="chart-header">
@@ -134,12 +141,6 @@
             <div id="radialChart" class="radial-chart-container"></div>
             <div class="chord-diagram-hint">Radial view showing authors translating from German to target languages.</div>
           </div>
-          <h2>Cluster language filter</h2>
-          <div class="cluster-filter-actions">
-            <span>Select a community to filter the graph.</span>
-            <button type="button" id="resetClusterFilter">Show all</button>
-          </div>
-          <div id="clusterLanguageFilter" class="cluster-filter-grid"></div>
         </aside>
       </div>
     </main>
