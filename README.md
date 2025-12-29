@@ -46,13 +46,17 @@ The analysis pipeline combines Python-based network construction and analysis wi
 │       ├── author_edges_community_1_2.md
 │       ├── language_edges.md
 │       └── language_nodes.md
-└── src/                              # Visualization modules
+└── src/                              # Visualization modules & build system
+	├── index.js                      # Main entry point (Webpack)
 	├── app.js                        # Main application logic
 	├── authorAuthor.js               # Author network visualization
 	├── authorLanguage.js             # Bipartite visualization
 	├── languageLanguage.js           # Language network visualization
 	├── styles.css                    # Styling
-	└── utils.js                      # Shared utilities
+	├── utils.js                      # Shared utilities
+	├── webpack.config.js             # Webpack config (dev server & build)
+	├── package.json                  # JS dependencies & scripts
+	└── dist/                         # Production build output (after `npm run build`)
 ```
 
 
@@ -175,15 +179,38 @@ Running the script writes three JSON files under `data/`:
 Optional community detection (Leiden, Infomap) requires `igraph`, `leidenalg`, and `infomap`, all pre-listed in `requirements.txt`. If a library is missing, that algorithm is skipped automatically. **Note:** `infomap` does not work on Windows machines.
 
 
-## 4. Launch the interactive visualizations
 
-Use any static web server so the browser can load the JSON files via `fetch`. For example:
+## 4. Launch the interactive visualizations (Dev & Production)
+
+### Quick Start (JavaScript Visualization)
 
 ```bash
+cd src
+npm install
+npm start
+```
+
+This will start a local development server (Webpack Dev Server) at http://localhost:8080/ with hot reloading. The app will be available at that address.
+
+### Building for Production
+
+To build a static production bundle (output to `src/dist/`):
+
+```bash
+cd src
+npm run build
+```
+
+You can then serve the contents of `src/dist/` using any static web server:
+
+```bash
+cd src/dist
 python -m http.server 8000
 ```
 
-Then navigate to http://localhost:8000/ in your browser.
+Navigate to http://localhost:8000/ to view the production build.
+
+> **Note:** The dev server (`npm start`) is recommended for local development. Use the static server only for the production build.
 
 
 ## Interactive Visualization Features
@@ -230,15 +257,16 @@ You can deploy the interactive visualization (including all JSON and CSV data fi
 - All data files in `data/`, `extracted/`, and generated plots/tables are accessible to the web app and can be fetched by D3.js.
 - If you add or update data, just commit and push—GitHub Pages will serve the latest version after the workflow completes.
 
-### Local development
 
-For local testing, you can continue to use:
+### Local development (legacy/static)
+
+If you prefer, you can still serve the static files (including the production build) using:
 
 ```bash
 python -m http.server 8000
 ```
 
-This mimics the static file serving provided by GitHub Pages.
+from the appropriate directory (`src/dist` for production, or project root for legacy mode). This mimics the static file serving provided by GitHub Pages.
 
 
 ## Statistical Analysis & Reporting

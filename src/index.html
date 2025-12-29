@@ -3,21 +3,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Author Communities & Centrality Rings</title>
-    <link rel="stylesheet" href="./src/styles.css" />
+    <title>Author & Language Translation Centralization</title>
     <script src="https://d3js.org/d3.v7.min.js" defer></script>
-    <script type="module" src="./main.js" defer></script>
   </head>
   <body>
     <header>
       <main>
-        <h1>Author Communities & Centrality Rings</h1>
-        <p>
-          Authors are colored by their detected community and positioned in concentric rings
-          representing centrality tiers. Use the edge-weight histogram to filter links, inspect the
-          centralization score distribution, and hover over the language popularity chart to see
-          which languages dominate the corpus.
-        </p>
+        <div class="top-panel">
+          <h1>Author & Language Translation Centralization</h1>
+          <div class="metadata-wrapper">
+            <div id="networkMetadata" class="network-metadata">
+              <h2>Network Stats</h2>
+              <div class="metadata-grid" id="metadataGrid"></div>
+            </div>
+            <div class="metadata-abstract">
+              <p>
+                Bibliographic translation data from national libraries often renders translational processes and mediating actors largely invisible, limiting our ability to study how literary works circulate across linguistic communities. Building on Heilbron’s centre–periphery model of translation flows, this project visualizes translation networks derived from 31,519 German-language fiction titles by 3,986 authors translated into eighty-one languages, using data from the German National Library (Deutsche Nationalbibliothek). The visualization models translation as a multi-level network connecting authors and languages, revealing how individual authors mediate between central and peripheral language communities.
+              </p>
+              <p>
+                The interactive system emphasizes author and language translation centralization: authors are arranged in concentric rings representing centrality tiers and color-coded by detected communities, making visible canonical authors that bridge linguistic cores and peripheries as well as translational authors operating within specific regions of the network. Linked histograms, language popularity charts, and edge-weight filters allow users to explore how translation dominance, shared language corridors, and author communities shape the structure of the network. By combining network analysis with coordinated visual encodings and dynamic interaction, the visualization makes translational transfer, authorial mediation, and language hierarchies perceptible within large-scale bibliographic data.
+              </p>
+            </div>
+          </div>
+        </div>
         <div class="cluster-controls">
           <section class="control-section">
             <h3>Language &amp; filter summaries</h3>
@@ -48,7 +56,7 @@
           <section class="control-section control-actions">
             <div class="control-actions-left">
               <label class="toggle-option">
-                <input id="showEdgesToggle" type="checkbox" checked />
+                <input id="showEdgesToggle" type="checkbox" />
                 <span>Show edges between authors</span>
               </label>
               <div class="selection-hint">Hide edges to focus solely on the concentric layout; filters still apply.</div>
@@ -62,14 +70,6 @@
                 <span>Only show connections shared by selected authors</span>
               </label>
               <div class="selection-hint">Filters edges down to overlaps between the currently selected authors.</div>
-            </div>
-            <div class="control-actions-right">
-              <div class="action-button-group">
-                <button id="clearSelection" type="button" class="icon-button" aria-label="Clear selection">
-                  <span aria-hidden="true">⟲</span>
-                </button>
-                <div class="action-description">Reset current selections</div>
-              </div>
             </div>
           </section>
         </div>
@@ -86,6 +86,13 @@
         <button id="clearAllFilters" type="button" class="filter-status-clear" title="Clear all filters">
           Clear All
         </button>
+      </div>
+      <div class="cluster-filter-bar">
+        <div>
+          <h2>Cluster language filter</h2>
+          <div class="selection-hint">Select a community to filter the graph.</div>
+        </div>
+        <div id="clusterLanguageFilter" class="cluster-filter-grid"></div>
       </div>
       <div class="cluster-layout-wrapper">
         <section class="panel">
@@ -131,12 +138,6 @@
             <div id="radialChart" class="radial-chart-container"></div>
             <div class="chord-diagram-hint">Radial view showing authors translating from German to target languages.</div>
           </div>
-          <h2>Cluster language filter</h2>
-          <div class="cluster-filter-actions">
-            <span>Select a community to filter the graph.</span>
-            <button type="button" id="resetClusterFilter">Show all</button>
-          </div>
-          <div id="clusterLanguageFilter" class="cluster-filter-grid"></div>
         </aside>
       </div>
     </main>
@@ -168,5 +169,18 @@
         <div class="chord-diagram-hint">Radial view with German at center showing translation flows to target languages.</div>
       </div>
     </div>
+    <footer class="site-footer">
+      <div class="footer-content">
+        <div class="footer-title">
+          <strong>Author Communities and the Language Network of German Fiction in Translation</strong><br/>
+          by <a href="https://github.com/lisateichmann" target="_blank" rel="noopener">Lisa Teichmann</a> and <a href="https://github.com/velitchko" target="_blank" rel="noopener">Velitchko Filipov</a>
+        </div>
+        <div class="footer-meta">
+          <a href="https://github.com/lisateichmann/dnb_trans_networks" target="_blank" rel="noopener">View project on GitHub</a>
+          <span class="footer-sep">|</span>
+          <span>Coded by <a href="https://github.com/velitchko" target="_blank" rel="noopener">@velitchko</a> in collaboration with <a href="https://github.com/lisateichmann" target="_blank" rel="noopener">@lisateichmann</a></span>
+        </div>
+      </div>
+    </footer>
   </body>
 </html>
