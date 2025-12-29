@@ -703,7 +703,7 @@ main {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center; /* vertically center the badge */
 }
 
 .author-detail-name {
@@ -1166,18 +1166,27 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
+  background: transparent; /* inherit badge background */
+  border: 1px solid rgba(255,255,255,0.06);
+  color: inherit; /* use badge text color */
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
-  transition: background 0.2s;
+  transition: background 0.12s, transform 0.08s, border-color 0.12s;
 }
 
 .filter-status-item-remove:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.12);
+}
+
+.filter-status-item-remove:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
 }
 
 .filter-status-clear {

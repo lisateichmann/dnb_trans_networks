@@ -188,6 +188,16 @@ function selectDefaultCentralityMetric(meta) {
   return metrics[0] || null;
 }
 
+// Friendly labels for centrality metrics (used by tooltips and UI)
+const CENTRALITY_LABELS = {
+  degree: "Degree centrality",
+  closeness: "Closeness centrality",
+  betweenness: "Betweenness centrality",
+  eigenvector: "Eigenvector centrality",
+  pagerank: "PageRank",
+  strength: "Strength",
+};
+
 function formatCentralityLabel(metric) {
   if (!metric) return "Centrality";
   return (
@@ -972,6 +982,13 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     getSelection() {
       return new Set(currentSelection);
     },
+    toggleCluster(clusterId) {
+      const next = new Set(currentSelection);
+      if (next.has(clusterId)) next.delete(clusterId);
+      else next.add(clusterId);
+      currentSelection = next;
+      emitSelection();
+    }
   };
 }
 
@@ -1002,28 +1019,7 @@ function drawLegend(ctx, width, height, communities, colorScale) {
   // Store tier click regions for interactivity
   const tierRegions = [];
 
-  if (communities.length) {
-    ctx.fillStyle = "#e5e7eb";
-    ctx.fillText("Communities", startX, y);
-    y += lineHeight;
-
-    const maxToShow = 8;
-    communities.slice(0, maxToShow).forEach((c) => {
-      ctx.fillStyle = colorScale(c);
-      ctx.beginPath();
-      ctx.arc(startX + 5, y + 5, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#d1d5db";
-      ctx.fillText(`Community ${c}`, startX + 14, y);
-      y += lineHeight;
-    });
-
-    if (communities.length > maxToShow) {
-      ctx.fillStyle = "#9ca3af";
-      ctx.fillText(`+${communities.length - maxToShow} more`, startX, y);
-      y += lineHeight;
-    }
-  }
+  // Community legend removed (we now surface cluster info via the cluster cards)
 
   if (CENTRALITY_TIER_ORDER.length) {
     y += 6;
@@ -1094,9 +1090,22 @@ function updateClusterVisibility(state) {
   const filterActive = state.clusterFilter && state.clusterFilter.size;
   let focusStillVisible = !filterActive || !state.focusNodeId;
   const idsToRemove = [];
+
+  const nodeClusterKey = (node) => {
+    // Prefer languageCommunity if present (may be array or string), otherwise fallback to communities[communityKey]
+    let key = node.languageCommunity;
+    if (key === undefined || key === null || key === "") {
+      const cid = node.communities?.[state.communityKey];
+      if (cid === undefined || cid === null) return null;
+      return String(cid);
+    }
+    if (Array.isArray(key)) return key.join('→');
+    return String(key);
+  };
+
   state.nodes.forEach((node) => {
-    const cid = node.communities?.[state.communityKey];
-    node.clusterVisible = !filterActive || state.clusterFilter.has(cid);
+    const key = nodeClusterKey(node);
+    node.clusterVisible = !filterActive || (key !== null && state.clusterFilter.has(key));
     if (node.clusterVisible && node.id === state.focusNodeId) {
       focusStillVisible = true;
     }
@@ -1129,8 +1138,21 @@ function nodesShareLanguage(nodeA, nodeB) {
 function passesClusterEdgeFilter(state, link) {
   if (state.selectionVisibleNodes && state.selectionVisibleNodes.size) return true;
   if (!state.clusterFilter || state.clusterFilter.size === 0) return true;
-  const sourceCluster = link.sourceNode?.communities?.[state.communityKey];
-  const targetCluster = link.targetNode?.communities?.[state.communityKey];
+
+  const getKey = (node) => {
+    let key = node?.languageCommunity;
+    if (key === undefined || key === null || key === "") {
+      const cid = node?.communities?.[state.communityKey];
+      if (cid === undefined || cid === null) return null;
+      return String(cid);
+    }
+    if (Array.isArray(key)) return key.join('→');
+    return String(key);
+  };
+
+  const sourceCluster = getKey(link.sourceNode);
+  const targetCluster = getKey(link.targetNode);
+
   if (!state.clusterFilter.has(sourceCluster) || !state.clusterFilter.has(targetCluster)) return false;
   if (sourceCluster !== targetCluster) return false;
   return nodesShareLanguage(link.sourceNode, link.targetNode);
@@ -1796,7 +1818,7 @@ async function init() {
     clusterFilterController: null,
     communitySummaries: [],
     onlySharedSelectionLinks: false,
-    showEdges: true,
+    showEdges: false,
     searchMatches: null,
     searchQuery: "",
     useTranslationOpacity: false,
@@ -2029,7 +2051,9 @@ async function init() {
           .text(`Language: ${lang}`);
         
         badge.append("button")
-          .attr("class", "filter-remove")
+          .attr("type", "button")
+          .attr("class", "filter-status-item-remove")
+          .attr("aria-label", "Remove language filter")
           .attr("title", "Remove this filter")
           .text("×")
           .on("click", () => {
@@ -2058,7 +2082,9 @@ async function init() {
           .text(`Cluster: ${cluster}`);
         
         badge.append("button")
-          .attr("class", "filter-remove")
+          .attr("type", "button")
+          .attr("class", "filter-status-item-remove")
+          .attr("aria-label", "Remove cluster filter")
           .attr("title", "Remove this filter")
           .text("×")
           .on("click", () => {
@@ -2087,7 +2113,9 @@ async function init() {
         .text(`Weight: ${minStr} - ${maxStr}`);
       
       badge.append("button")
-        .attr("class", "filter-remove")
+        .attr("type", "button")
+        .attr("class", "filter-status-item-remove")
+        .attr("aria-label", "Remove weight filter")
         .attr("title", "Remove this filter")
         .text("×")
         .on("click", () => {
@@ -2112,7 +2140,9 @@ async function init() {
         .text(`Centrality: ${minStr} - ${maxStr}`);
       
       badge.append("button")
-        .attr("class", "filter-remove")
+        .attr("type", "button")
+        .attr("class", "filter-status-item-remove")
+        .attr("aria-label", "Remove centralization filter")
         .attr("title", "Remove this filter")
         .text("×")
         .on("click", () => {
@@ -2135,7 +2165,9 @@ async function init() {
           .text(`Tier: ${label}`);
         
         badge.append("button")
-          .attr("class", "filter-remove")
+          .attr("type", "button")
+          .attr("class", "filter-status-item-remove")
+          .attr("aria-label", "Remove tier filter")
           .attr("title", "Remove this filter")
           .text("×")
           .on("click", () => {
@@ -2159,7 +2191,9 @@ async function init() {
         .text(label);
       
       badge.append("button")
-        .attr("class", "filter-remove")
+        .attr("type", "button")
+        .attr("class", "filter-status-item-remove")
+        .attr("aria-label", "Clear selection")
         .attr("title", "Clear selection")
         .text("×")
         .on("click", () => {
