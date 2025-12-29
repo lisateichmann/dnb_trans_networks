@@ -154,6 +154,22 @@ function ensureNodeLanguageSet(node) {
   return set;
 }
 
+// Normalize a languageCommunity value (string or array) into a canonical string key.
+// Arrays are treated as ordered tag lists and preserved as-is when joined with '→'.
+function canonicalizeLangValue(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (Array.isArray(value)) {
+    // Preserve original order — do not sort or parse values
+    return value.map((v) => String(v)).join('→');
+  }
+  return String(value);
+}
+
+// Get a canonical language community key for a node using the node.languageCommunity property only.
+function getLanguageCommunityKey(node) {
+  return canonicalizeLangValue(node?.languageCommunity);
+}
+
 function collectAvailableLanguageKeys(rawData) {
   const languages = new Set();
   (rawData?.nodes || []).forEach((node) => {
@@ -320,11 +336,8 @@ function mixCommunityColor(baseColor, tier) {
 }
 
 function getNodeFill(node, state) {
+  // Color reflects centralization tier only (central, periphery, outer)
   const tier = node._centralizationTier || getCentralizationTier(getCentralizationScore(node));
-  const cid = state.communityKey ? node.communities?.[state.communityKey] : null;
-  if (cid !== undefined && cid !== null && cid >= 0) {
-    return mixCommunityColor(state.colorScale(cid), tier);
-  }
   return TIER_NODE_COLORS[tier] || "#d1d5db";
 }
 
@@ -357,40 +370,77 @@ function getNodeOpacity(node, state) {
 }
 
 function projectToRings(nodes, rings, communityKey) {
-  const tierScores = {
-    outer: [],
-    periphery: [],
-    central: [],
+  // Assign nodes to rings based on their languageCommunity key (override ring placement)
+  const ringBuckets = {
+    central: new Map(), // languageCommunity '0'
+    periphery: new Map(), // languageCommunity '1' and '2'
+    outer: new Map(), // all bridges/others
   };
 
-  const communityBuckets = new Map();
-  nodes.forEach((node) => {
-    const communityId = node.communities?.[communityKey] ?? -1;
-    if (!communityBuckets.has(communityId)) {
-      communityBuckets.set(communityId, []);
-    }
-    communityBuckets.get(communityId).push(node);
+  const ringScores = {
+    central: [],
+    periphery: [],
+    outer: [],
+  };
 
+  nodes.forEach((node) => {
     const score = getCentralizationScore(node);
     node._centralizationValue = Number.isFinite(score) ? score : Number.NaN;
-    const tier = getCentralizationTier(node._centralizationValue);
-    node._centralizationTier = tier;
-    if (Number.isFinite(node._centralizationValue)) {
-      tierScores[tier].push(node._centralizationValue);
+    node._centralizationTier = getCentralizationTier(node._centralizationValue); // still used for color
+
+    const key = getLanguageCommunityKey(node, communityKey); // prefers node.languageCommunity, falls back to node.communities[communityKey]
+    const hasLangCommunity = node.languageCommunity !== undefined && node.languageCommunity !== null;
+
+    let ring = "outer";
+    let groupKey = key ?? "_noise";
+
+    if (hasLangCommunity) {
+      const lc = node.languageCommunity;
+      if (Array.isArray(lc)) {
+        if (lc.length === 1) {
+          const s = String(lc[0]);
+          if (s === "0") ring = "central";
+          else if (s === "1" || s === "2") ring = "periphery";
+          else ring = "outer";
+        } else {
+          ring = "outer"; // multi-assigned => bridge
+        }
+        groupKey = lc.join("→");
+      } else {
+        const s = String(lc);
+        if (s === "0") ring = "central";
+        else if (s === "1" || s === "2") ring = "periphery";
+        else ring = "outer";
+        groupKey = s;
+      }
+    } else if (key !== null) {
+      // fallback to numeric community id from node.communities
+      const s = String(key);
+      if (s === "0") ring = "central";
+      else if (s === "1" || s === "2") ring = "periphery";
+      else ring = "outer";
+      groupKey = s;
     }
+
+    if (!ringBuckets[ring].has(groupKey)) ringBuckets[ring].set(groupKey, []);
+    ringBuckets[ring].get(groupKey).push(node);
+
+    if (Number.isFinite(node._centralizationValue)) ringScores[ring].push(node._centralizationValue);
   });
 
-  const tierExtents = {};
-  Object.entries(tierScores).forEach(([tier, values]) => {
+  // Compute extents per ring
+  const ringExtents = {};
+  Object.entries(ringScores).forEach(([ring, values]) => {
     if (values.length) {
       const [minValue, maxValue] = d3.extent(values);
-      tierExtents[tier] = { min: minValue, max: maxValue };
+      ringExtents[ring] = { min: minValue, max: maxValue };
     } else {
-      tierExtents[tier] = { min: 0, max: 0 };
+      ringExtents[ring] = { min: 0, max: 0 };
     }
   });
 
-  adjustRingBandsToCounts(rings, tierScores);
+  // Adjust ring bands according to counts (reuse existing function)
+  adjustRingBandsToCounts(rings, ringScores);
 
   const bandRanges = {};
   rings.tiers.forEach((tier) => {
@@ -401,69 +451,105 @@ function projectToRings(nodes, rings, communityKey) {
   });
 
   const clampRadius = (radius) => Math.max(rings.minRadius, Math.min(rings.maxRadius, radius));
-  const getBandForTier = (tier) =>
-    bandRanges[tier] || bandRanges.outer || { inner: rings.minRadius, outer: rings.maxRadius };
 
-  nodes.forEach((node) => {
-    const tier = node._centralizationTier || "outer";
-    const band = getBandForTier(tier);
-    const extent = tierExtents[tier] || { min: 0, max: 0 };
-    const inner = band.inner ?? rings.minRadius;
-    const outer = band.outer ?? rings.maxRadius;
-    const bandSpan = Math.max(1e-3, outer - inner);
-    let ratio = 0.5;
-    if (Number.isFinite(node._centralizationValue) && extent.max !== extent.min) {
-      const clampedScore = Math.max(extent.min, Math.min(extent.max, node._centralizationValue));
-      ratio = (extent.max - clampedScore) / (extent.max - extent.min);
-    }
-    node._centralizationNormalized = 1 - ratio;
-    node._targetRadius = clampRadius(inner + ratio * bandSpan);
-  });
-
-  const sortByScoreDesc = (a, b) => {
-    const aScore = Number.isFinite(a._centralizationValue) ? a._centralizationValue : -Infinity;
-    const bScore = Number.isFinite(b._centralizationValue) ? b._centralizationValue : -Infinity;
-    return bScore - aScore;
-  };
-
-  const entries = Array.from(communityBuckets.entries());
-  const visibleCommunities = entries.filter(([cid]) => cid >= 0);
-  const noiseCommunities = entries.filter(([cid]) => cid < 0);
-  const orderedCommunities = visibleCommunities.length ? visibleCommunities : entries;
-
+  // For each ring, layout nodes into angular sectors per group and set initial positions
   const fullCircle = Math.PI * 2;
-  const sectorCount = orderedCommunities.length || 1;
   const gapAngle = fullCircle * 0.02;
-  const sectorAngle = (fullCircle - gapAngle * sectorCount) / sectorCount;
 
-  orderedCommunities.forEach(([cid, bucket], index) => {
-    if (!bucket.length) return;
-    bucket.sort(sortByScoreDesc);
-    const startAngle = index * (sectorAngle + gapAngle);
-    bucket.forEach((node, idx) => {
-      const t = bucket.length === 1 ? 0.5 : idx / (bucket.length - 1);
-      const angleJitter = (Math.random() - 0.5) * (sectorAngle / Math.max(6, bucket.length));
-      const angle = startAngle + t * sectorAngle + angleJitter;
-      const radialJitter = node._targetRadius * 0.03 * (Math.random() - 0.5);
-      const radius = clampRadius(node._targetRadius + radialJitter);
-      node.x = rings.centerX + radius * Math.cos(angle);
-      node.y = rings.centerY + radius * Math.sin(angle);
+  Object.entries(ringBuckets).forEach(([ring, groups]) => {
+    const entries = Array.from(groups.entries()).filter(([, bucket]) => bucket.length > 0);
+    if (!entries.length) return;
+
+    // compute per-ring extents
+    const extent = ringExtents[ring] || { min: 0, max: 0 };
+
+    // compute target radii for nodes in this ring
+    entries.forEach(([key, bucket]) => {
+      bucket.forEach((node) => {
+        const band = bandRanges[ring] || { inner: rings.minRadius, outer: rings.maxRadius };
+        const inner = band.inner ?? rings.minRadius;
+        const outer = band.outer ?? rings.maxRadius;
+        const bandSpan = Math.max(1e-3, outer - inner);
+        // Allow a small overflow margin so nodes can escape the strict band when needed to avoid overlaps
+        const overflow = Math.min(20, Math.max(6, bandSpan * 0.12));
+        node._overflowMargin = overflow;
+
+        let ratio = 0.5;
+        if (Number.isFinite(node._centralizationValue) && extent.max !== extent.min) {
+          const clampedScore = Math.max(extent.min, Math.min(extent.max, node._centralizationValue));
+          ratio = (extent.max - clampedScore) / (extent.max - extent.min);
+        }
+        node._centralizationNormalized = 1 - ratio;
+        // target radius not clamped to allow radial freedom during force simulation
+        node._targetRadius = inner + ratio * bandSpan;
+      });
     });
-  });
 
-  noiseCommunities.forEach(([, bucket]) => {
-    bucket.sort(sortByScoreDesc);
-    bucket.forEach((node) => {
-      const angle = Math.random() * fullCircle;
-      const radialJitter = node._targetRadius * 0.05 * (Math.random() - 0.5);
-      const radius = clampRadius(node._targetRadius + radialJitter);
-      node.x = rings.centerX + radius * Math.cos(angle);
-      node.y = rings.centerY + radius * Math.sin(angle);
+    // Build angular sectors for groups in this ring
+    const sectorCount = entries.length || 1;
+    const sectorAngle = (fullCircle - gapAngle * sectorCount) / sectorCount;
+
+    entries.forEach(([key, bucket], index) => {
+      // sort by centralization descending
+      bucket.sort((a, b) => {
+        const aScore = Number.isFinite(a._centralizationValue) ? a._centralizationValue : -Infinity;
+        const bScore = Number.isFinite(b._centralizationValue) ? b._centralizationValue : -Infinity;
+        return bScore - aScore;
+      });
+      const startAngle = index * (sectorAngle + gapAngle);
+      bucket.forEach((node, idx) => {
+        const band = bandRanges[ring] || { inner: rings.minRadius, outer: rings.maxRadius };
+        const inner = band.inner ?? rings.minRadius;
+        const outer = band.outer ?? rings.maxRadius;
+        const overflow = node._overflowMargin || Math.min(20, Math.max(6, (outer - inner) * 0.12));
+
+        const t = bucket.length === 1 ? 0.5 : idx / (bucket.length - 1);
+        const angleJitter = (Math.random() - 0.5) * (sectorAngle / Math.max(6, bucket.length));
+        const angle = startAngle + t * sectorAngle + angleJitter;
+        const radialJitter = (node._targetRadius || 0) * 0.03 * (Math.random() - 0.5);
+
+        // allow initial placement to be slightly outside band to reduce collisions
+        const minAllowed = Math.max(rings.minRadius - overflow, inner - overflow);
+        const maxAllowed = Math.min(rings.maxRadius + overflow, outer + overflow);
+        const target = node._targetRadius || ((inner + outer) / 2);
+        const radius = Math.max(minAllowed, Math.min(maxAllowed, target + radialJitter));
+
+        node._initialX = rings.centerX + radius * Math.cos(angle);
+        node._initialY = rings.centerY + radius * Math.sin(angle);
+        // start positions are initial
+        node.x = node._initialX;
+        node.y = node._initialY;
+      });
     });
-  });
 
-  applyCollisionForces(nodes, rings);
+    // Run a small force simulation to resolve overlaps while keeping nodes near their initial positions
+    const groupNodes = entries.flatMap(([, bucket]) => bucket);
+    if (groupNodes.length) {
+      // Use collision radius based on node tier (base radius + padding) to reduce overlaps
+      const sim = d3.forceSimulation(groupNodes)
+        .stop()
+        .alphaMin(0.001)
+        .velocityDecay(0.3)
+        .force('x', d3.forceX((d) => d._initialX).strength(0.22))
+        .force('y', d3.forceY((d) => d._initialY).strength(0.22))
+        .force('collide', d3.forceCollide((d) => {
+          const rBase = d._centralizationTier === 'central' ? 6.2 : d._centralizationTier === 'periphery' ? 5.2 : 4.2;
+          return Math.max(2, rBase + 3);
+        }).strength(1))
+        .force('center', d3.forceCenter(rings.centerX, rings.centerY));
+
+      // tick the simulation a fixed number of times for deterministic layout
+      for (let i = 0; i < 80; i++) sim.tick();
+      sim.stop();
+
+      // assign back and clamp to ring (allow per-node overflow margins)
+      groupNodes.forEach((node) => {
+        clampToRing(node, rings, node._overflowMargin || 0);
+      });
+    }
+  });
 }
+
 
 function applyCollisionForces(nodes, rings) {
   const iterations = 80;
@@ -490,19 +576,26 @@ function applyCollisionForces(nodes, rings) {
   }
 }
 
-function clampToRing(node, rings) {
+function clampToRing(node, rings, overflow = node._overflowMargin || 0) {
   const dx = node.x - rings.centerX;
   const dy = node.y - rings.centerY;
   let dist = Math.hypot(dx, dy);
+  // If node is at origin, place it at inner radius + small offset
   if (dist === 0) {
-    node.x = rings.centerX + rings.minRadius;
+    const defaultRadius = Math.max(rings.minRadius - overflow, rings.minRadius);
+    node.x = rings.centerX + defaultRadius;
     node.y = rings.centerY;
     return;
   }
   const tierBand = rings.tiers.find((band) => band.tier === node._centralizationTier);
-  const tierMin = tierBand?.innerRadius ?? rings.minRadius;
-  const tierMax = tierBand?.radius ?? rings.maxRadius;
-  const clamped = Math.max(tierMin, Math.min(tierMax, dist));
+  const tierMin = (tierBand?.innerRadius ?? rings.minRadius) - overflow;
+  const tierMax = (tierBand?.radius ?? rings.maxRadius) + overflow;
+
+  // Also ensure not to go beyond global ring bounds with overflow
+  const globalMin = Math.max(rings.minRadius - overflow, 0);
+  const globalMax = rings.maxRadius + overflow;
+
+  const clamped = Math.max(globalMin, Math.min(globalMax, Math.max(tierMin, Math.min(tierMax, dist))));
   if (Math.abs(clamped - dist) > 0.001) {
     const scale = clamped / dist;
     node.x = rings.centerX + dx * scale;
@@ -817,29 +910,21 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
   const summaries = new Map();
 
   nodes.forEach((node) => {
-    // Support multi-community (bridge) assignments as an array or string
-    let commKey = node.languageCommunity;
-    if (!commKey) {
-      // fallback to old logic if not present
-      const cid = node.communities?.[communityKey];
-      if (cid === undefined || cid === null || cid < 0) return;
-      commKey = String(cid);
-    }
-    // If commKey is an array, join with arrows
-    if (Array.isArray(commKey)) {
-      commKey = commKey.join('→');
-    }
-    if (!commKey) return;
+    // Use languageCommunity property only — no fallback
+    const commKey = getLanguageCommunityKey(node);
+    if (commKey === null) return; // skip nodes without languageCommunity
+
     ensureNodeLanguageSet(node);
-    if (!summaries.has(commKey)) {
-      summaries.set(commKey, {
-        id: commKey,
+    const commId = String(commKey);
+    if (!summaries.has(commId)) {
+      summaries.set(commId, {
+        id: commId,
         authorCount: 0,
         totalLanguageWeight: 0,
         languageCounts: new Map(),
       });
     }
-    const summary = summaries.get(commKey);
+    const summary = summaries.get(commId);
     summary.authorCount += 1;
     (node.languages || []).forEach((entry) => {
       const key = normalizeLanguageKey(entry.language);
@@ -1092,15 +1177,8 @@ function updateClusterVisibility(state) {
   const idsToRemove = [];
 
   const nodeClusterKey = (node) => {
-    // Prefer languageCommunity if present (may be array or string), otherwise fallback to communities[communityKey]
-    let key = node.languageCommunity;
-    if (key === undefined || key === null || key === "") {
-      const cid = node.communities?.[state.communityKey];
-      if (cid === undefined || cid === null) return null;
-      return String(cid);
-    }
-    if (Array.isArray(key)) return key.join('→');
-    return String(key);
+    // Always use node.languageCommunity (preserve order for arrays). Do NOT fallback to numeric communities.
+    return getLanguageCommunityKey(node);
   };
 
   state.nodes.forEach((node) => {
@@ -3042,16 +3120,6 @@ async function init() {
       ctx.fill();
       ctx.restore();
       
-      // Add tier-colored outline for better visibility (drawn without opacity)
-      const tierColor = TIER_NODE_COLORS[tier] || "#94a3b8";
-      ctx.save();
-      ctx.globalAlpha = nodeOpacity * 0.9;
-      ctx.strokeStyle = tierColor;
-      ctx.lineWidth = Math.max(1.2, 1.8 / zoomScale);
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
 
       const isFocus = state.focusNodeId === node.id;
       const isHover = state.hoverNode === node;
@@ -3295,10 +3363,49 @@ async function init() {
       state.colorScale,
       (selection) => {
         state.clusterFilter = selection;
+        console.log("[cluster filter] selection:", Array.from(selection));
+
+        // Mark debug match flags on nodes so we can visually inspect which nodes are considered matched
+        try {
+          const selSet = state.clusterFilter || new Set();
+          state.nodes.forEach(n => {
+            const k = getLanguageCommunityKey(n);
+            n._debugMatched = k !== null && selSet.has(String(k));
+          });
+        } catch (e) {
+          console.warn("[cluster filter] debug match flags failed", e);
+        }
+
         updateClusterVisibility(state);
+        // Debug: count nodes that match the selected keys by computing language community key
+        try {
+          const sel = state.clusterFilter ? Array.from(state.clusterFilter) : [];
+          const matchedNodes = state.nodes.filter(n => {
+            const key = getLanguageCommunityKey(n);
+            return key !== null && sel.indexOf(String(key)) !== -1;
+          });
+          console.log("[cluster filter] matched nodes by key:", matchedNodes.length, "/", state.nodes.length);
+          console.log("[cluster filter] matched sample:", matchedNodes.slice(0,10).map(n=>({id:n.id, key:getLanguageCommunityKey(n), tier:n._centralizationTier}))); 
+          const visible = state.nodes.filter(n => n.clusterVisible).length;
+          console.log("[cluster filter] clusterVisible count:", visible, "; sample:", state.nodes.filter(n => n.clusterVisible).slice(0,10).map(n=>({id:n.id, key:getLanguageCommunityKey(n), tier:n._centralizationTier})));
+        } catch (e) {
+          console.warn("[cluster filter] debug failed", e);
+        }
         updateAuthorDetailPanel();
         updateFilterStatus();
         draw();
+
+        // Also print a small breakdown of counts per languageCommunity key (debug)
+        try {
+          const counts = {};
+          state.nodes.forEach(n => {
+            const k = getLanguageCommunityKey(n) || '_noise';
+            counts[k] = (counts[k] || 0) + 1;
+          });
+          console.log('[cluster filter] counts per key (sample):', Object.entries(counts).slice(0,10));
+        } catch (e) {
+          /* ignore */
+        }
       }
     );
     state.clusterFilterController = controller;
