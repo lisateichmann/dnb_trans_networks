@@ -10,16 +10,20 @@
     <header>
       <main>
         <h1>Author Communities & Centrality Rings</h1>
-        <div id="networkMetadata" class="network-metadata">
-          <h2>Network Summary</h2>
-          <div class="metadata-grid" id="metadataGrid"></div>
+        <div class="metadata-wrapper">
+          <div id="networkMetadata" class="network-metadata">
+            <h2>Network Summary</h2>
+            <div class="metadata-grid" id="metadataGrid"></div>
+          </div>
+          <div class="metadata-abstract">
+            <p>
+              Authors are colored by their detected community and positioned in concentric rings
+              representing centrality tiers. Use the edge-weight histogram to filter links, inspect the
+              centralization score distribution, and hover over the language popularity chart to see
+              which languages dominate the corpus.
+            </p>
+          </div>
         </div>
-        <p>
-          Authors are colored by their detected community and positioned in concentric rings
-          representing centrality tiers. Use the edge-weight histogram to filter links, inspect the
-          centralization score distribution, and hover over the language popularity chart to see
-          which languages dominate the corpus.
-        </p>
         <div class="cluster-controls">
           <section class="control-section">
             <h3>Language &amp; filter summaries</h3>
@@ -64,14 +68,6 @@
                 <span>Only show connections shared by selected authors</span>
               </label>
               <div class="selection-hint">Filters edges down to overlaps between the currently selected authors.</div>
-            </div>
-            <div class="control-actions-right">
-              <div class="action-button-group">
-                <button id="clearSelection" type="button" class="icon-button" aria-label="Clear selection">
-                  <span aria-hidden="true">⟲</span>
-                </button>
-                <div class="action-description">Reset current selections</div>
-              </div>
             </div>
           </section>
         </div>

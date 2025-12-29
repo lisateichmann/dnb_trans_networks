@@ -1649,8 +1649,83 @@ async function init() {
   const resetClusterFilterBtn = document.getElementById("resetClusterFilter");
   const authorDetailPanel = document.getElementById("authorDetailPanel");
   const legendContainer = null; // legend now drawn on canvas
+  const metadataGrid = document.getElementById("metadataGrid");
 
-  const rawData = await loadData();
+  const rawData = await loadData();  
+  
+  // Compute and log network metadata
+  const networkMetadata = computeNetworkMetadata(rawData);
+  console.log("Network metadata:", networkMetadata);
+  if (typeof renderNetworkMetadata === "function") {
+    renderNetworkMetadata(rawData);
+  }
+
+  // Compute network metadata (node count, link count, avg degree, density, etc.)
+  function computeNetworkMetadata(rawData) {
+    if (!rawData || !Array.isArray(rawData.nodes) || !Array.isArray(rawData.links)) {
+      return {};
+    }
+    const nodeCount = rawData.nodes.length;
+    const linkCount = rawData.links.length;
+    // For undirected graphs, each link connects two nodes
+    const possibleLinks = nodeCount * (nodeCount - 1) / 2;
+    const density = possibleLinks > 0 ? linkCount / possibleLinks : 0;
+    // Compute degree for each node
+    const degreeMap = new Map();
+    rawData.links.forEach(link => {
+      degreeMap.set(link.source, (degreeMap.get(link.source) || 0) + 1);
+      degreeMap.set(link.target, (degreeMap.get(link.target) || 0) + 1);
+    });
+    const degrees = Array.from(degreeMap.values());
+    const avgDegree = degrees.length ? degrees.reduce((a, b) => a + b, 0) / degrees.length : 0;
+    const maxDegree = degrees.length ? Math.max(...degrees) : 0;
+    const minDegree = degrees.length ? Math.min(...degrees) : 0;
+    const modularity = rawData?.meta?.greedyModularity;
+
+    return {
+      nodeCount,
+      linkCount,
+      density: Number(density.toFixed(4)),
+      avgDegree: Number(avgDegree.toFixed(2)),
+      maxDegree,
+      minDegree,
+      modularity
+    };
+  }
+
+  function renderNetworkMetadata(authorData) {
+    if (!metadataGrid) return;
+    const a = computeNetworkMetadata(authorData || {});
+
+    const intOrNA = (v) => (v === undefined || v === null || Number.isNaN(Number(v)) ? "N/A" : formatNumber(v));
+    const decOrNA = (v, d = 2) => (Number.isFinite(v) ? Number(v).toFixed(d) : "N/A");
+
+    metadataGrid.innerHTML = `
+      <div class="metadata-header"><strong>Metric</strong></div>
+      <div class="metadata-header"><strong>Author-Author Network</strong></div>
+
+      <div class="metric-label">Number of Nodes</div>
+      <div class="metric-value">${intOrNA(a.nodeCount)}</div>
+
+      <div class="metric-label">Number of Links</div>
+      <div class="metric-value">${intOrNA(a.linkCount)}</div>
+
+      <div class="metric-label">Average Degree</div>
+      <div class="metric-value">${decOrNA(a.avgDegree, 2)}</div>
+
+      <div class="metric-label">Density</div>
+      <div class="metric-value">${decOrNA(a.density, 4)}</div>
+
+      <div class="metric-label">Max degree</div>
+      <div class="metric-value">${intOrNA(a.maxDegree)}</div>
+
+      <div class="metric-label">Min degree</div>
+      <div class="metric-value">${intOrNA(a.minDegree)}</div>
+
+      <div class="metric-label">Modularity (Greedy)</div>
+      <div class="metric-value">${decOrNA(a.modularity, 4)}</div>
+    `;
+  }
 
   const nodeById = new Map();
   const nodes = rawData.nodes.map((original) => {
@@ -2166,6 +2241,14 @@ async function init() {
         handleLanguageFilterToggle(entry, { multi });
       }
     });
+    // Refresh header metadata (author-author only)
+    try {
+      if (typeof renderNetworkMetadata === "function") {
+        renderNetworkMetadata(rawData);
+      }
+    } catch (e) {
+      console.warn("Failed to render network metadata:", e);
+    }
   } catch (error) {
     console.warn("Could not load language-language data for chord diagram:", error);
   }
