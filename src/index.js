@@ -164,25 +164,29 @@ function computeCentralizationThresholds(values = []) {
 function findAuthorMatches(nodes, query) {
   const normalizedQuery = (query || "").trim().toLowerCase();
   if (!normalizedQuery) return [];
-  const ringBuckets = {
-    central: [], // community 0
-    periphery: [], // community 1 and 2
-    outer: [], // all others
-  };
-
+  const matches = [];
   nodes.forEach((node) => {
-    const key = getLanguageCommunityKey(node);
-    if (key === "0") {
-      ringBuckets.central.push(node);
-    } else if (key === "1" || key === "2") {
-      ringBuckets.periphery.push(node);
-    } else {
-      ringBuckets.outer.push(node);
-    }
+    const label = (node.label || `${node.id ?? ""}`).trim();
+    if (!label) return;
+    const normalizedLabel = label.toLowerCase();
+    const index = normalizedLabel.indexOf(normalizedQuery);
+    if (index === -1) return;
+    const rank = normalizedLabel === normalizedQuery ? 0 : index === 0 ? 1 : 2;
+    matches.push({
+      node,
+      rank,
+      weight: Number(node.totalWeight) || 0,
+      matchIndex: index,
+      label,
+    });
   });
-  // TODO: implement actual matching logic if needed
-  // This function currently just buckets nodes by ring
-  return ringBuckets.central.concat(ringBuckets.periphery, ringBuckets.outer);
+  matches.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    if (a.matchIndex !== b.matchIndex) return a.matchIndex - b.matchIndex;
+    if (a.weight !== b.weight) return b.weight - a.weight;
+    return (a.label || "").localeCompare(b.label || "");
+  });
+  return matches.map((entry) => entry.node);
 }
 
 function ensureNodeLanguageSet(node) {
