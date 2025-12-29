@@ -20,23 +20,23 @@ const COMMUNITY_COLORS = [
   "#a5b4fc",
 ];
 
-const CENTRALITY_TIER_ORDER = ["outer", "periphery", "central"];
+const CENTRALITY_TIER_ORDER = ["outer", "periphery", "core"];
 const MIN_TIER_BAND_RATIO = 0.12;
 const DEFAULT_CENTRALIZATION_THRESHOLDS = {
-  central: 8.2,
-  periphery: 3.8,
+  core: 8.0,
+  periphery: 3.5,
 };
 const CENTRALIZATION_QUANTILES = {
   periphery: 0.4,
-  central: 0.85,
+  core: 0.85,
 };
 const CENTRALIZATION_TIER_LABELS = {
   outer: "Outer periphery",
   periphery: "Periphery",
-  central: "Core",
+  core: "Core",
 };
 const TIER_NODE_COLORS = {
-  central: "#fbbf24",
+  core: "#fbbf24",
   periphery: "#60a5fa",
   outer: "#64748b",
 };
@@ -63,6 +63,39 @@ function getLanguageColorScale(languageIds) {
 
 let centralizationThresholds = { ...DEFAULT_CENTRALIZATION_THRESHOLDS };
 
+// Build adjacency map for quick lookup of outgoing neighbors
+function buildAdjacencyMap(links) {
+  const map = new Map();
+  links.forEach(link => {
+    if (link.sourceNode && link.targetNode) {
+      if (!map.has(link.sourceNode.id)) map.set(link.sourceNode.id, new Set());
+      map.get(link.sourceNode.id).add(link.targetNode.id);
+    }
+  });
+  return map;
+}
+
+// Returns the normalized or raw centralization score for a node
+function getCentralizationScore(node) {
+  if (!node) return NaN;
+  if (typeof node.centralizationScoreNormalized === 'number') return node.centralizationScoreNormalized;
+  if (typeof node.centralizationScore === 'number') return node.centralizationScore;
+  return NaN;
+}
+// Normalize a language key: trims, lowercases, and removes non-alphanumerics for consistent comparison
+function normalizeLanguageKey(language) {
+  if (!language) return "";
+  return String(language).trim().toLowerCase().replace(/[^a-z0-9_\-]/gi, "");
+}
+
+// Returns the centralization tier (core, periphery, outer) for a given score
+function getCentralizationTier(score, thresholds = getCentralizationThresholds()) {
+  if (!Number.isFinite(score)) return "outer";
+  if (score >= thresholds.core) return "core";
+  if (score >= thresholds.periphery) return "periphery";
+  return "outer";
+}
+
 function getCentralizationThresholds() {
   return { ...centralizationThresholds };
 }
@@ -71,12 +104,35 @@ function setCentralizationThresholds(next) {
   if (!next) return;
   const current = getCentralizationThresholds();
   centralizationThresholds = {
-    central: Number.isFinite(next.central) ? next.central : current.central,
+    core: Number.isFinite(next.core) ? next.core : current.core,
     periphery: Number.isFinite(next.periphery) ? next.periphery : current.periphery,
   };
-  if (centralizationThresholds.central <= centralizationThresholds.periphery) {
-    centralizationThresholds.central = centralizationThresholds.periphery + 0.01;
+  if (centralizationThresholds.core <= centralizationThresholds.periphery) {
+    centralizationThresholds.core = centralizationThresholds.periphery + 0.01;
   }
+}
+
+// Updates state.selectionVisibleNodes to include selected nodes and their neighbors (if not shared-only)
+function updateSelectionNeighborhood(state) {
+  if (!state.selectedIds || state.selectedIds.size === 0) {
+    state.selectionVisibleNodes = null;
+    return;
+  }
+  const allowed = new Set(state.selectedIds);
+  const requireShared = state.onlySharedSelectionLinks && state.selectedIds.size > 1;
+  if (!requireShared) {
+    state.links.forEach((link) => {
+      if (!link.visible) return;
+      const sourceId = link.sourceNode?.id;
+      const targetId = link.targetNode?.id;
+      if (!sourceId || !targetId) return;
+      if (state.selectedIds.has(sourceId) || state.selectedIds.has(targetId)) {
+        allowed.add(sourceId);
+        allowed.add(targetId);
+      }
+    });
+  }
+  state.selectionVisibleNodes = allowed;
 }
 
 function computeCentralizationThresholds(values = []) {
@@ -93,13 +149,13 @@ function computeCentralizationThresholds(values = []) {
 
   const quantileValue = (p) => d3.quantileSorted(filtered, p);
   const periphery = quantileValue(CENTRALIZATION_QUANTILES.periphery);
-  const central = quantileValue(CENTRALIZATION_QUANTILES.central);
+  const core = quantileValue(CENTRALIZATION_QUANTILES.core);
   const thresholds = {
     periphery: Number.isFinite(periphery) ? periphery : DEFAULT_CENTRALIZATION_THRESHOLDS.periphery,
-    central: Number.isFinite(central) ? central : DEFAULT_CENTRALIZATION_THRESHOLDS.central,
+    core: Number.isFinite(core) ? core : DEFAULT_CENTRALIZATION_THRESHOLDS.core,
   };
-  if (thresholds.central <= thresholds.periphery) {
-    thresholds.central = thresholds.periphery + 0.01;
+  if (thresholds.core <= thresholds.periphery) {
+    thresholds.core = thresholds.periphery + 0.01;
   }
   setCentralizationThresholds(thresholds);
   return thresholds;
@@ -108,39 +164,25 @@ function computeCentralizationThresholds(values = []) {
 function findAuthorMatches(nodes, query) {
   const normalizedQuery = (query || "").trim().toLowerCase();
   if (!normalizedQuery) return [];
-  const matches = [];
+  const ringBuckets = {
+    central: [], // community 0
+    periphery: [], // community 1 and 2
+    outer: [], // all others
+  };
 
   nodes.forEach((node) => {
-    const label = (node.label || `${node.id ?? ""}`).trim();
-    if (!label) return;
-    const normalizedLabel = label.toLowerCase();
-    const index = normalizedLabel.indexOf(normalizedQuery);
-    if (index === -1) return;
-    const rank = normalizedLabel === normalizedQuery ? 0 : index === 0 ? 1 : 2;
-    matches.push({
-      node,
-      rank,
-      weight: Number(node.totalWeight) || 0,
-      matchIndex: index,
-      label,
-    });
+    const key = getLanguageCommunityKey(node);
+    if (key === "0") {
+      ringBuckets.central.push(node);
+    } else if (key === "1" || key === "2") {
+      ringBuckets.periphery.push(node);
+    } else {
+      ringBuckets.outer.push(node);
+    }
   });
-
-  matches.sort((a, b) => {
-    if (a.rank !== b.rank) return a.rank - b.rank;
-    if (a.matchIndex !== b.matchIndex) return a.matchIndex - b.matchIndex;
-    if (a.weight !== b.weight) return b.weight - a.weight;
-    return (a.label || "").localeCompare(b.label || "");
-  });
-
-  return matches.map((entry) => entry.node);
-}
-
-let languageRatioCache = null;
-let languageRatioPromise = null;
-
-function normalizeLanguageKey(language) {
-  return (language || "").trim().toLowerCase();
+  // TODO: implement actual matching logic if needed
+  // This function currently just buckets nodes by ring
+  return ringBuckets.central.concat(ringBuckets.periphery, ringBuckets.outer);
 }
 
 function ensureNodeLanguageSet(node) {
@@ -154,20 +196,10 @@ function ensureNodeLanguageSet(node) {
   return set;
 }
 
-// Normalize a languageCommunity value (string or array) into a canonical string key.
-// Arrays are treated as ordered tag lists and preserved as-is when joined with '→'.
-function canonicalizeLangValue(value) {
-  if (value === undefined || value === null || value === "") return null;
-  if (Array.isArray(value)) {
-    // Preserve original order — do not sort or parse values
-    return value.map((v) => String(v)).join('→');
-  }
-  return String(value);
-}
 
 // Get a canonical language community key for a node using the node.languageCommunity property only.
 function getLanguageCommunityKey(node) {
-  return canonicalizeLangValue(node?.languageCommunity);
+  return node?.languageCommunity;
 }
 
 function collectAvailableLanguageKeys(rawData) {
@@ -239,7 +271,7 @@ function buildRings(width, height) {
   const tiers = [
     { tier: "outer", radius: maxRadius, innerRadius: peripheryRadius },
     { tier: "periphery", radius: peripheryRadius, innerRadius: coreRadius },
-    { tier: "central", radius: coreRadius, innerRadius: minRadius },
+    { tier: "core", radius: coreRadius, innerRadius: minRadius },
   ];
 
   return {
@@ -251,93 +283,16 @@ function buildRings(width, height) {
   };
 }
 
-function adjustRingBandsToCounts(rings, tierScores) {
-  if (!rings?.tiers?.length) return;
-  const orderedTiers = ["central", "periphery", "outer"];
-  const totalCount = orderedTiers.reduce(
-    (sum, tier) => sum + ((tierScores?.[tier] || []).length || 0),
-    0
-  );
-  const usableBand = Math.max(1, rings.maxRadius - rings.minRadius);
-  const fallbackRatio = 1 / orderedTiers.length;
-  const baseRatios = orderedTiers.map((tier) => {
-    const count = (tierScores?.[tier] || []).length || 0;
-    const share = totalCount > 0 ? count / totalCount : fallbackRatio;
-    return Math.max(MIN_TIER_BAND_RATIO, share);
-  });
-  const ratioSum = baseRatios.reduce((sum, ratio) => sum + ratio, 0) || 1;
-
-  let cursor = rings.minRadius;
-  orderedTiers.forEach((tierName, index) => {
-    const tier = rings.tiers.find((band) => band.tier === tierName);
-    if (!tier) return;
-    const ratio = baseRatios[index] / ratioSum;
-    const width =
-      index === orderedTiers.length - 1 ? rings.maxRadius - cursor : Math.max(usableBand * ratio, usableBand * 0.05);
-    tier.innerRadius = cursor;
-    tier.radius = cursor + width;
-    cursor = tier.radius;
-  });
-
-  const outerTier = rings.tiers.find((band) => band.tier === "outer");
-  if (outerTier) outerTier.radius = rings.maxRadius;
-}
-
-function getCentralizationScore(node) {
-  const normalized = Number(node.centralizationScoreNormalized);
-  if (Number.isFinite(normalized)) return normalized;
-  const raw = Number(node.centralizationScore);
-  if (Number.isFinite(raw)) return raw;
-  return Number.NaN;
-}
-
-function getCentralizationTier(score, thresholds = getCentralizationThresholds()) {
-  if (!Number.isFinite(score)) return "outer";
-  if (score >= thresholds.central) return "central";
-  if (score >= thresholds.periphery) return "periphery";
-  return "outer";
-}
-
-function updateSelectionNeighborhood(state) {
-  if (!state.selectedIds || state.selectedIds.size === 0) {
-    state.selectionVisibleNodes = null;
-    return;
-  }
-  const allowed = new Set(state.selectedIds);
-  const requireShared = state.onlySharedSelectionLinks && state.selectedIds.size > 1;
-  if (!requireShared) {
-    state.links.forEach((link) => {
-      if (!link.visible) return;
-      const sourceId = link.sourceNode?.id;
-      const targetId = link.targetNode?.id;
-      if (!sourceId || !targetId) return;
-      if (state.selectedIds.has(sourceId) || state.selectedIds.has(targetId)) {
-        allowed.add(sourceId);
-        allowed.add(targetId);
-      }
-    });
-  }
-  state.selectionVisibleNodes = allowed;
-}
-
 function getTierRangeLabel(tier, thresholds = getCentralizationThresholds()) {
-  if (tier === "central") return `≥ ${thresholds.central.toFixed(1)}`;
-  if (tier === "periphery")
-    return `${thresholds.periphery.toFixed(1)}–${thresholds.central.toFixed(1)}`;
+  if (tier === "core") return `≥ ${thresholds.core.toFixed(1)}`;
+  if (tier === "periphery") return `${thresholds.periphery.toFixed(1)}–${thresholds.core.toFixed(1)}`;
+  // outer and any other tiers represent scores below the periphery threshold
   return `< ${thresholds.periphery.toFixed(1)}`;
 }
 
-function mixCommunityColor(baseColor, tier) {
-  const color = d3.color(baseColor || "#cbd5f5");
-  if (!color) return TIER_NODE_COLORS[tier] || "#f8fafc";
-  const adjustment = tier === "central" ? 1.1 : tier === "periphery" ? 0.85 : 0.7;
-  const blended = color.copy({ opacity: 1 });
-  return blended.brighter(adjustment).formatRgb();
-}
-
 function getNodeFill(node, state) {
-  // Color reflects centralization tier only (central, periphery, outer)
-  const tier = node._centralizationTier || getCentralizationTier(getCentralizationScore(node));
+  // Color reflects centralization tier only (core, periphery, outer)
+  const tier = node._centralizationTier;
   return TIER_NODE_COLORS[tier] || "#d1d5db";
 }
 
@@ -353,6 +308,12 @@ function getLinkBetween(state, sourceId, targetId) {
 }
 
 function getNodeOpacity(node, state) {
+  // If hovering, fade all except hovered node and its neighbors
+  if (state.hoverNode) {
+    if (node.id === state.hoverNode.id) return 1;
+    if (state.hoverNeighbors && state.hoverNeighbors.has(node.id)) return 1;
+    return 0.18;
+  }
   if (!state.useTranslationOpacity) return 1;
   const extent = state.translationWeightExtent;
   if (!extent || extent.length !== 2) return 1;
@@ -372,13 +333,13 @@ function getNodeOpacity(node, state) {
 function projectToRings(nodes, rings, communityKey) {
   // Assign nodes to rings based on their languageCommunity key (override ring placement)
   const ringBuckets = {
-    central: new Map(), // languageCommunity '0'
+    core: new Map(), // languageCommunity '0'
     periphery: new Map(), // languageCommunity '1' and '2'
     outer: new Map(), // all bridges/others
   };
 
   const ringScores = {
-    central: [],
+    core: [],
     periphery: [],
     outer: [],
   };
@@ -386,41 +347,19 @@ function projectToRings(nodes, rings, communityKey) {
   nodes.forEach((node) => {
     const score = getCentralizationScore(node);
     node._centralizationValue = Number.isFinite(score) ? score : Number.NaN;
-    node._centralizationTier = getCentralizationTier(node._centralizationValue); // still used for color
+    // Do not assign _centralizationTier by centralization score anymore
 
-    const key = getLanguageCommunityKey(node, communityKey); // prefers node.languageCommunity, falls back to node.communities[communityKey]
-    const hasLangCommunity = node.languageCommunity !== undefined && node.languageCommunity !== null;
-
+    const comm = node[communityKey] != null ? String(node[communityKey]) : "";
     let ring = "outer";
-    let groupKey = key ?? "_noise";
-
-    if (hasLangCommunity) {
-      const lc = node.languageCommunity;
-      if (Array.isArray(lc)) {
-        if (lc.length === 1) {
-          const s = String(lc[0]);
-          if (s === "0") ring = "central";
-          else if (s === "1" || s === "2") ring = "periphery";
-          else ring = "outer";
-        } else {
-          ring = "outer"; // multi-assigned => bridge
-        }
-        groupKey = lc.join("→");
-      } else {
-        const s = String(lc);
-        if (s === "0") ring = "central";
-        else if (s === "1" || s === "2") ring = "periphery";
-        else ring = "outer";
-        groupKey = s;
-      }
-    } else if (key !== null) {
-      // fallback to numeric community id from node.communities
-      const s = String(key);
-      if (s === "0") ring = "central";
-      else if (s === "1" || s === "2") ring = "periphery";
-      else ring = "outer";
-      groupKey = s;
+    let groupKey = comm || "_noise";
+    if (comm === "0") {
+      ring = "core";
+    } else if (comm === "1" || comm === "2") {
+      ring = "periphery";
+    } else {
+      ring = "outer";
     }
+    groupKey = comm || "_noise";
 
     if (!ringBuckets[ring].has(groupKey)) ringBuckets[ring].set(groupKey, []);
     ringBuckets[ring].get(groupKey).push(node);
@@ -428,20 +367,7 @@ function projectToRings(nodes, rings, communityKey) {
     if (Number.isFinite(node._centralizationValue)) ringScores[ring].push(node._centralizationValue);
   });
 
-  // Compute extents per ring
-  const ringExtents = {};
-  Object.entries(ringScores).forEach(([ring, values]) => {
-    if (values.length) {
-      const [minValue, maxValue] = d3.extent(values);
-      ringExtents[ring] = { min: minValue, max: maxValue };
-    } else {
-      ringExtents[ring] = { min: 0, max: 0 };
-    }
-  });
-
-  // Adjust ring bands according to counts (reuse existing function)
-  adjustRingBandsToCounts(rings, ringScores);
-
+  // For each ring, distribute all nodes evenly around the full circle at the middle of the band
   const bandRanges = {};
   rings.tiers.forEach((tier) => {
     bandRanges[tier.tier] = {
@@ -450,102 +376,37 @@ function projectToRings(nodes, rings, communityKey) {
     };
   });
 
-  const clampRadius = (radius) => Math.max(rings.minRadius, Math.min(rings.maxRadius, radius));
+  // Place nodes with languageCommunity inside the core ring, others randomly in canvas
+  const width = rings.centerX * 2;
+  const height = rings.centerY * 2;
+  const core = rings.tiers.find(t => t.tier === "core");
+  const inner = core.innerRadius ?? rings.minRadius;
+  const outer = core.radius ?? rings.maxRadius;
+  nodes.forEach(node => {
+    // Assign centralization tier strictly by languageCommunity (string)
+    const comm = node.languageCommunity ? node.languageCommunity : "";
 
-  // For each ring, layout nodes into angular sectors per group and set initial positions
-  const fullCircle = Math.PI * 2;
-  const gapAngle = fullCircle * 0.02;
+    if (comm === "0") {
+      node._centralizationTier = 'core';
+    } else if (comm === "1" || comm === "2") {
+      node._centralizationTier = 'periphery';
+    } else {
+      node._centralizationTier = 'outer';
+    }
 
-  Object.entries(ringBuckets).forEach(([ring, groups]) => {
-    const entries = Array.from(groups.entries()).filter(([, bucket]) => bucket.length > 0);
-    if (!entries.length) return;
-
-    // compute per-ring extents
-    const extent = ringExtents[ring] || { min: 0, max: 0 };
-
-    // compute target radii for nodes in this ring
-    entries.forEach(([key, bucket]) => {
-      bucket.forEach((node) => {
-        const band = bandRanges[ring] || { inner: rings.minRadius, outer: rings.maxRadius };
-        const inner = band.inner ?? rings.minRadius;
-        const outer = band.outer ?? rings.maxRadius;
-        const bandSpan = Math.max(1e-3, outer - inner);
-        // Allow a small overflow margin so nodes can escape the strict band when needed to avoid overlaps
-        const overflow = Math.min(20, Math.max(6, bandSpan * 0.12));
-        node._overflowMargin = overflow;
-
-        let ratio = 0.5;
-        if (Number.isFinite(node._centralizationValue) && extent.max !== extent.min) {
-          const clampedScore = Math.max(extent.min, Math.min(extent.max, node._centralizationValue));
-          ratio = (extent.max - clampedScore) / (extent.max - extent.min);
-        }
-        node._centralizationNormalized = 1 - ratio;
-        // target radius not clamped to allow radial freedom during force simulation
-        node._targetRadius = inner + ratio * bandSpan;
-      });
-    });
-
-    // Build angular sectors for groups in this ring
-    const sectorCount = entries.length || 1;
-    const sectorAngle = (fullCircle - gapAngle * sectorCount) / sectorCount;
-
-    entries.forEach(([key, bucket], index) => {
-      // sort by centralization descending
-      bucket.sort((a, b) => {
-        const aScore = Number.isFinite(a._centralizationValue) ? a._centralizationValue : -Infinity;
-        const bScore = Number.isFinite(b._centralizationValue) ? b._centralizationValue : -Infinity;
-        return bScore - aScore;
-      });
-      const startAngle = index * (sectorAngle + gapAngle);
-      bucket.forEach((node, idx) => {
-        const band = bandRanges[ring] || { inner: rings.minRadius, outer: rings.maxRadius };
-        const inner = band.inner ?? rings.minRadius;
-        const outer = band.outer ?? rings.maxRadius;
-        const overflow = node._overflowMargin || Math.min(20, Math.max(6, (outer - inner) * 0.12));
-
-        const t = bucket.length === 1 ? 0.5 : idx / (bucket.length - 1);
-        const angleJitter = (Math.random() - 0.5) * (sectorAngle / Math.max(6, bucket.length));
-        const angle = startAngle + t * sectorAngle + angleJitter;
-        const radialJitter = (node._targetRadius || 0) * 0.03 * (Math.random() - 0.5);
-
-        // allow initial placement to be slightly outside band to reduce collisions
-        const minAllowed = Math.max(rings.minRadius - overflow, inner - overflow);
-        const maxAllowed = Math.min(rings.maxRadius + overflow, outer + overflow);
-        const target = node._targetRadius || ((inner + outer) / 2);
-        const radius = Math.max(minAllowed, Math.min(maxAllowed, target + radialJitter));
-
-        node._initialX = rings.centerX + radius * Math.cos(angle);
-        node._initialY = rings.centerY + radius * Math.sin(angle);
-        // start positions are initial
-        node.x = node._initialX;
-        node.y = node._initialY;
-      });
-    });
-
-    // Run a small force simulation to resolve overlaps while keeping nodes near their initial positions
-    const groupNodes = entries.flatMap(([, bucket]) => bucket);
-    if (groupNodes.length) {
-      // Use collision radius based on node tier (base radius + padding) to reduce overlaps
-      const sim = d3.forceSimulation(groupNodes)
-        .stop()
-        .alphaMin(0.001)
-        .velocityDecay(0.3)
-        .force('x', d3.forceX((d) => d._initialX).strength(0.22))
-        .force('y', d3.forceY((d) => d._initialY).strength(0.22))
-        .force('collide', d3.forceCollide((d) => {
-          const rBase = d._centralizationTier === 'central' ? 6.2 : d._centralizationTier === 'periphery' ? 5.2 : 4.2;
-          return Math.max(2, rBase + 3);
-        }).strength(1))
-        .force('center', d3.forceCenter(rings.centerX, rings.centerY));
-
-      // tick the simulation a fixed number of times for deterministic layout
-      for (let i = 0; i < 80; i++) sim.tick();
-      sim.stop();
-
-      // assign back and clamp to ring (allow per-node overflow margins)
-      groupNodes.forEach((node) => {
-        clampToRing(node, rings, node._overflowMargin || 0);
-      });
+    // Place node in the band matching its tier
+    const band = rings.tiers.find(t => t.tier === node._centralizationTier);
+    if (band) {
+      const inner = band.innerRadius ?? rings.minRadius;
+      const outer = band.radius ?? rings.maxRadius;
+      const r = inner + Math.random() * (outer - inner);
+      const angle = Math.random() * 2 * Math.PI;
+      node.x = node._initialX = rings.centerX + r * Math.cos(angle);
+      node.y = node._initialY = rings.centerY + r * Math.sin(angle);
+    } else {
+      // Fallback: scatter elsewhere
+      node.x = node._initialX = Math.random() * width;
+      node.y = node._initialY = Math.random() * height;
     }
   });
 }
@@ -587,15 +448,16 @@ function clampToRing(node, rings, overflow = node._overflowMargin || 0) {
     node.y = rings.centerY;
     return;
   }
-  const tierBand = rings.tiers.find((band) => band.tier === node._centralizationTier);
-  const tierMin = (tierBand?.innerRadius ?? rings.minRadius) - overflow;
-  const tierMax = (tierBand?.radius ?? rings.maxRadius) + overflow;
+  // Use _bandKey (set by projectToRings) to determine band
+  let band = node._bandKey ? rings.bands?.[node._bandKey] : null;
+  const bandMin = (band?.inner ?? rings.minRadius) - overflow;
+  const bandMax = (band?.outer ?? rings.maxRadius) + overflow;
 
   // Also ensure not to go beyond global ring bounds with overflow
   const globalMin = Math.max(rings.minRadius - overflow, 0);
   const globalMax = rings.maxRadius + overflow;
 
-  const clamped = Math.max(globalMin, Math.min(globalMax, Math.max(tierMin, Math.min(tierMax, dist))));
+  const clamped = Math.max(globalMin, Math.min(globalMax, Math.max(bandMin, Math.min(bandMax, dist))));
   if (Math.abs(clamped - dist) > 0.001) {
     const scale = clamped / dist;
     node.x = rings.centerX + dx * scale;
@@ -960,7 +822,7 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
     })
     // Custom sort: 0,1,2, 0→1, 0→2, 1→2, 0→1→2
     .sort((a, b) => {
-      const order = ["0","1","2","0→1","0→2","1→2","0→1→2"];
+      const order = ["0", "1", "2", "0→1", "0→2", "1→2", "0→1→2"];
       const aIdx = order.indexOf(a.id);
       const bIdx = order.indexOf(b.id);
       if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
@@ -970,7 +832,7 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
       const aParts = a.id.split('→').length;
       const bParts = b.id.split('→').length;
       if (aParts !== bParts) return aParts - bParts;
-      return a.id.localeCompare(b.id, undefined, {numeric: true});
+      return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
 }
 
@@ -994,14 +856,22 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     .attr("type", "button")
     .attr("class", "cluster-filter-card")
     .style("background", d => {
-      // Use the colorScale for the main color, with more transparency for a lighter tint
-      const base = colorScale(d.id);
-      // Convert hex to rgba with lower alpha
+      // Color by centrality tier for visual consistency
+      // Use the tier of the cluster (d.tier or d.centralizationTier or similar)
+      let tier = d.tier || d.centralizationTier;
+      if (!tier && typeof d.id === 'string') {
+        // Guess tier from id if possible (e.g., '0' = core, '1'/'2' = periphery)
+        if (d.id === '0') tier = 'core';
+        else if (d.id === '1' || d.id === '2') tier = 'periphery';
+        else tier = 'outer';
+      }
+      const base = TIER_NODE_COLORS[tier] || '#d1d5db';
+      // Convert hex to rgba with lower alpha for a light background
       if (/^#[0-9a-fA-F]{6}$/.test(base)) {
-        const r = parseInt(base.slice(1,3),16);
-        const g = parseInt(base.slice(3,5),16);
-        const b = parseInt(base.slice(5,7),16);
-        return `rgba(${r},${g},${b},0.10)`;
+        const r = parseInt(base.slice(1, 3), 16);
+        const g = parseInt(base.slice(3, 5), 16);
+        const b = parseInt(base.slice(5, 7), 16);
+        return `rgba(${r},${g},${b},0.13)`;
       }
       return base;
     });
@@ -1010,10 +880,18 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     const card = d3.select(this);
     card.selectAll("*").remove();
     const header = card.append("div").attr("class", "cluster-filter-row");
+    // Determine tier color for swatch
+    let tier = d.tier || d.centralizationTier;
+    if (!tier && typeof d.id === 'string') {
+      if (d.id === '0') tier = 'core';
+      else if (d.id === '1' || d.id === '2') tier = 'periphery';
+      else tier = 'outer';
+    }
+    const swatchColor = TIER_NODE_COLORS[tier] || '#d1d5db';
     header
       .append("strong")
       .html(
-        `<span class="cluster-filter-swatch" style="background:${colorScale(d.id)}"></span>` +
+        `<span class="cluster-filter-swatch" style="background:${swatchColor}"></span>` +
         (d.id.includes('→') ? `Bridge ${d.id}` : `Community ${d.id}`)
       );
     header.append("span").text(`${d.authorCount} authors`);
@@ -1115,10 +993,10 @@ function drawLegend(ctx, width, height, communities, colorScale) {
     CENTRALITY_TIER_ORDER.forEach((tier) => {
       const label = CENTRALIZATION_TIER_LABELS[tier];
       if (!label) return;
-      
+
       const tierStartY = y;
       const tierColor = TIER_NODE_COLORS[tier];
-      
+
       // Store click region
       tierRegions.push({
         tier,
@@ -1127,18 +1005,18 @@ function drawLegend(ctx, width, height, communities, colorScale) {
         width: 150,
         height: lineHeight
       });
-      
+
       // Draw simple filled circle with tier color
       ctx.fillStyle = tierColor;
       ctx.beginPath();
       ctx.arc(startX + 6, y + 6, 5, 0, Math.PI * 2);
       ctx.fill();
-      
+
       ctx.fillStyle = "#d1d5db";
       ctx.fillText(`${label} (${getTierRangeLabel(tier)})`, startX + 16, y);
       y += lineHeight;
     });
-    
+
     // Add clickable hint
     ctx.fillStyle = "#9ca3af";
     ctx.font = "9px 'Segoe UI', system-ui, sans-serif";
@@ -1147,7 +1025,7 @@ function drawLegend(ctx, width, height, communities, colorScale) {
   }
 
   ctx.restore();
-  
+
   // Return tier regions for click handling
   return tierRegions;
 }
@@ -1217,19 +1095,9 @@ function passesClusterEdgeFilter(state, link) {
   if (state.selectionVisibleNodes && state.selectionVisibleNodes.size) return true;
   if (!state.clusterFilter || state.clusterFilter.size === 0) return true;
 
-  const getKey = (node) => {
-    let key = node?.languageCommunity;
-    if (key === undefined || key === null || key === "") {
-      const cid = node?.communities?.[state.communityKey];
-      if (cid === undefined || cid === null) return null;
-      return String(cid);
-    }
-    if (Array.isArray(key)) return key.join('→');
-    return String(key);
-  };
 
-  const sourceCluster = getKey(link.sourceNode);
-  const targetCluster = getKey(link.targetNode);
+  const sourceCluster = getLanguageCommunityKey(link.sourceNode);
+  const targetCluster = getLanguageCommunityKey(link.targetNode);
 
   if (!state.clusterFilter.has(sourceCluster) || !state.clusterFilter.has(targetCluster)) return false;
   if (sourceCluster !== targetCluster) return false;
@@ -1237,13 +1105,13 @@ function passesClusterEdgeFilter(state, link) {
 }
 
 function createChordDiagram(languageData, options = {}) {
-  const { 
-    onLanguageClick, 
+  const {
+    onLanguageClick,
     container: containerSelector = "#chordDiagram",
     width: customWidth = 320,
     height: customHeight = 320
   } = options;
-  
+
   const container = d3.select(containerSelector);
   container.selectAll("*").remove();
 
@@ -1335,7 +1203,7 @@ function createChordDiagram(languageData, options = {}) {
     .map(d => d.idx);
 
   // Reorder matrix according to optimized ordering
-  const reorderedMatrix = optimizedOrder.map(i => 
+  const reorderedMatrix = optimizedOrder.map(i =>
     optimizedOrder.map(j => matrix[i][j])
   );
   const reorderedLanguages = optimizedOrder.map(i => topLanguages[i]);
@@ -1373,12 +1241,11 @@ function createChordDiagram(languageData, options = {}) {
     .style("cursor", "pointer")
     .attr("class", "chord-arc")
     .attr("data-lang-index", d => d.index)
-    .on("mouseenter", function(event, d) {
+    .on("mouseenter", function (event, d) {
       const lang = reorderedLanguages[d.index];
       const langNode = languageData.nodes.find(n => n.id === lang);
-      
-      console.log("Hovering arc:", lang, "index:", d.index);
-      
+
+
       // Get connected languages
       const connectedLangs = new Set();
       chords.forEach(chord => {
@@ -1390,39 +1257,37 @@ function createChordDiagram(languageData, options = {}) {
         }
       });
 
-      console.log("Connected languages:", Array.from(connectedLangs));
 
       // Fade unconnected arcs using fill-opacity
       svg.selectAll(".chord-arc")
-        .each(function(arcData) {
+        .each(function (arcData) {
           const arcLang = reorderedLanguages[arcData.index];
           const shouldBeVisible = arcData.index === d.index || connectedLangs.has(arcLang);
-          console.log(`Arc ${arcLang} (index ${arcData.index}): shouldBeVisible=${shouldBeVisible}`);
         })
-        .attr("fill-opacity", function(arcData) {
+        .attr("fill-opacity", function (arcData) {
           const arcLang = reorderedLanguages[arcData.index];
           return arcData.index === d.index || connectedLangs.has(arcLang) ? 1 : 0.15;
         })
-        .attr("stroke-width", function(arcData) {
+        .attr("stroke-width", function (arcData) {
           return arcData.index === d.index ? 2 : 1;
         })
-        .attr("stroke", function(arcData) {
+        .attr("stroke", function (arcData) {
           return arcData.index === d.index ? "#fbbf24" : "rgba(15, 23, 42, 0.3)";
         });
 
       // Emphasize connected text labels, fade unconnected ones
       svg.selectAll(".chord-label")
-        .style("opacity", function(labelData) {
+        .style("opacity", function (labelData) {
           const labelLang = reorderedLanguages[labelData.index];
           return labelData.index === d.index || connectedLangs.has(labelLang) ? 1 : 0.2;
         })
-        .style("font-weight", function(labelData) {
+        .style("font-weight", function (labelData) {
           return labelData.index === d.index ? "bold" : "normal";
         });
 
       // Emphasize connected ribbons
       svg.selectAll(".ribbon")
-        .style("opacity", chord => 
+        .style("opacity", chord =>
           chord.source.index === d.index || chord.target.index === d.index ? 1.0 : 0.15
         );
 
@@ -1434,14 +1299,14 @@ function createChordDiagram(languageData, options = {}) {
       tooltipHTML += `${formatNumber(authorCount)} authors<br/>`;
       tooltipHTML += `${connections} connected language${connections !== 1 ? 's' : ''}<br/>`;
       tooltipHTML += `<em style="font-size: 0.85em; color: #cbd5e1;">Click to filter network</em>`;
-      
+
       chordTooltip
         .style("opacity", 1)
         .html(tooltipHTML)
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mouseleave", function() {
+    .on("mouseleave", function () {
       svg.selectAll(".ribbon").style("opacity", 1.0);
       svg.selectAll(".chord-arc")
         .attr("fill-opacity", 1)
@@ -1452,7 +1317,7 @@ function createChordDiagram(languageData, options = {}) {
         .style("font-weight", "normal");
       chordTooltip.style("opacity", 0);
     })
-    .on("click", function(event, d) {
+    .on("click", function (event, d) {
       const lang = reorderedLanguages[d.index];
       const langKey = normalizeLanguageKey(lang);
       if (typeof onLanguageClick === "function") {
@@ -1494,11 +1359,11 @@ function createChordDiagram(languageData, options = {}) {
     .attr("stroke", "none")
     .attr("class", "ribbon")
     .style("cursor", "pointer")
-    .on("mouseenter", function(event, d) {
+    .on("mouseenter", function (event, d) {
       // Fade all ribbons except the hovered one
       svg.selectAll(".ribbon").style("opacity", 0.15);
       d3.select(this).style("opacity", 1.0);
-      
+
       const sourceLang = reorderedLanguages[d.source.index];
       const targetLang = reorderedLanguages[d.target.index];
       const value = reorderedMatrix[d.source.index][d.target.index];
@@ -1508,12 +1373,12 @@ function createChordDiagram(languageData, options = {}) {
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mousemove", function(event) {
+    .on("mousemove", function (event) {
       chordTooltip
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mouseleave", function() {
+    .on("mouseleave", function () {
       // Reset all ribbons to full opacity
       svg.selectAll(".ribbon").style("opacity", 1.0);
       chordTooltip.style("opacity", 0);
@@ -1606,24 +1471,24 @@ function createRadialChart(languageData, options = {}) {
     .attr("stroke", "none")
     .attr("data-lang-id", d => d.data.id)
     .style("cursor", "pointer")
-    .on("mouseenter", function(event, d) {
+    .on("mouseenter", function (event, d) {
       svg.selectAll(".radial-ribbon").attr("opacity", 0.15);
       svg.selectAll(".radial-arc").attr("opacity", 0.3);
       d3.select(this).attr("opacity", 0.9);
       svg.selectAll(`.radial-arc[data-lang-id="${d.data.id}"]`).attr("opacity", 1);
-      
+
       radialTooltip
         .style("opacity", 1)
         .html(`<strong>${d.data.id.toUpperCase()}</strong><br/>${formatNumber(d.data.authorCount)} authors<br/>${formatNumber(d.data.totalWeight)} translations`)
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mousemove", function(event) {
+    .on("mousemove", function (event) {
       radialTooltip
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mouseleave", function() {
+    .on("mouseleave", function () {
       svg.selectAll(".radial-ribbon").attr("opacity", 0.5);
       svg.selectAll(".radial-arc").attr("opacity", 1);
       radialTooltip.style("opacity", 0);
@@ -1640,24 +1505,24 @@ function createRadialChart(languageData, options = {}) {
     .attr("stroke", "none")
     .attr("data-lang-id", d => d.data.id)
     .style("cursor", "pointer")
-    .on("mouseenter", function(event, d) {
+    .on("mouseenter", function (event, d) {
       svg.selectAll(".radial-ribbon").attr("opacity", 0.15);
       svg.selectAll(".radial-arc").attr("opacity", 0.3);
       d3.select(this).attr("opacity", 1);
       svg.selectAll(`.radial-ribbon[data-lang-id="${d.data.id}"]`).attr("opacity", 0.9);
-      
+
       radialTooltip
         .style("opacity", 1)
         .html(`<strong>${d.data.id.toUpperCase()}</strong><br/>${formatNumber(d.data.authorCount)} authors<br/>${formatNumber(d.data.totalWeight)} translations`)
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mousemove", function(event) {
+    .on("mousemove", function (event) {
       radialTooltip
         .style("left", `${event.pageX + 12}px`)
         .style("top", `${event.pageY + 12}px`);
     })
-    .on("mouseleave", function() {
+    .on("mouseleave", function () {
       svg.selectAll(".radial-ribbon").attr("opacity", 0.5);
       svg.selectAll(".radial-arc").attr("opacity", 1);
       radialTooltip.style("opacity", 0);
@@ -1687,12 +1552,12 @@ function createRadialChart(languageData, options = {}) {
 
   // Draw German center
   const germanGroup = svg.append("g").attr("class", "german-center");
-  
+
   germanGroup.append("circle")
     .attr("r", centerRadius)
     .attr("fill", "rgba(15, 23, 42, 0.85)")
     .attr("stroke", "none");
-  
+
   germanGroup.append("text")
     .attr("text-anchor", "middle")
     .attr("dominant-baseline", "middle")
@@ -1700,7 +1565,7 @@ function createRadialChart(languageData, options = {}) {
     .attr("font-weight", "bold")
     .attr("fill", "#e5e7eb")
     .text("GER");
-  
+
   germanGroup.append("text")
     .attr("y", centerRadius + 15)
     .attr("text-anchor", "middle")
@@ -1751,11 +1616,10 @@ async function init() {
   const legendContainer = null; // legend now drawn on canvas
   const metadataGrid = document.getElementById("metadataGrid");
 
-  const rawData = await loadData();  
-  
+  const rawData = await loadData();
+
   // Compute and log network metadata
   const networkMetadata = computeNetworkMetadata(rawData);
-  console.log("Network metadata:", networkMetadata);
   if (typeof renderNetworkMetadata === "function") {
     renderNetworkMetadata(rawData);
   }
@@ -1767,6 +1631,7 @@ async function init() {
     }
     const nodeCount = rawData.nodes.length;
     const linkCount = rawData.links.length;
+    const languageCount = rawData.meta.languagePopularity.languageCount;
     // For undirected graphs, each link connects two nodes
     const possibleLinks = nodeCount * (nodeCount - 1) / 2;
     const density = possibleLinks > 0 ? linkCount / possibleLinks : 0;
@@ -1785,6 +1650,7 @@ async function init() {
     return {
       nodeCount,
       linkCount,
+      languageCount,
       density: Number(density.toFixed(4)),
       avgDegree: Number(avgDegree.toFixed(2)),
       maxDegree,
@@ -1802,25 +1668,28 @@ async function init() {
 
     metadataGrid.innerHTML = `
       <div class="metadata-header"><strong>Metric</strong></div>
-      <div class="metadata-header"><strong>Author-Author Network</strong></div>
+      <div class="metadata-header"><strong>Translation Network</strong></div>
 
-      <div class="metric-label">Number of Nodes</div>
+      <div class="metric-label">Num. Authors</div>
       <div class="metric-value">${intOrNA(a.nodeCount)}</div>
 
-      <div class="metric-label">Number of Links</div>
+      <div class="metric-label">Num. Shared Translations</div>
       <div class="metric-value">${intOrNA(a.linkCount)}</div>
 
-      <div class="metric-label">Average Degree</div>
-      <div class="metric-value">${decOrNA(a.avgDegree, 2)}</div>
+      <div class="metric-label">Num. Languages</div>
+      <div class="metric-value">${intOrNA(a.languageCount)}</div>
 
-      <div class="metric-label">Density</div>
-      <div class="metric-value">${decOrNA(a.density, 4)}</div>
+      <div class="metric-label">Avg. Degree</div>
+      <div class="metric-value">${decOrNA(a.avgDegree, 2)}</div>
 
       <div class="metric-label">Max degree</div>
       <div class="metric-value">${intOrNA(a.maxDegree)}</div>
-
+      
       <div class="metric-label">Min degree</div>
       <div class="metric-value">${intOrNA(a.minDegree)}</div>
+      
+      <div class="metric-label">Density</div>
+      <div class="metric-value">${decOrNA(a.density, 4)}</div>
 
       <div class="metric-label">Modularity (Greedy)</div>
       <div class="metric-value">${decOrNA(a.modularity, 4)}</div>
@@ -1865,6 +1734,9 @@ async function init() {
   const defaultCentralityMetric = selectDefaultCentralityMetric(rawData.meta);
   const translationWeightExtent = d3.extent(nodes, (node) => Number(node.totalWeight) || 0);
 
+  // Build adjacency map for fast neighbor lookup (place here, after links, before state)
+  const adjacencyMap = buildAdjacencyMap(links);
+
   const state = {
     canvas,
     ctx,
@@ -1904,6 +1776,7 @@ async function init() {
     detailHoverConnection: null,
     tierFilter: new Set(),
     legendTierRegions: [],
+    adjacencyMap,
   };
 
   const allWeights = links
@@ -2008,7 +1881,7 @@ async function init() {
         const mean = d3.mean(centralizationValues) ?? 0;
         const min = d3.min(centralizationValues) ?? 0;
         const max = d3.max(centralizationValues) ?? 0;
-        const tierSummary = `Core ${getTierRangeLabel("central", thresholds)} • Periphery ${getTierRangeLabel(
+        const tierSummary = `Core ${getTierRangeLabel("core", thresholds)} • Periphery ${getTierRangeLabel(
           "periphery",
           thresholds
         )} • Outer ${getTierRangeLabel("outer", thresholds)}`;
@@ -2123,11 +1996,11 @@ async function init() {
       languages.forEach(lang => {
         const badge = filterStatusItems.append("div")
           .attr("class", "filter-status-item filter-type-language");
-        
+
         badge.append("span")
           .attr("class", "filter-label")
           .text(`Language: ${lang}`);
-        
+
         badge.append("button")
           .attr("type", "button")
           .attr("class", "filter-status-item-remove")
@@ -2154,11 +2027,11 @@ async function init() {
       clusters.forEach(cluster => {
         const badge = filterStatusItems.append("div")
           .attr("class", "filter-status-item filter-type-cluster");
-        
+
         badge.append("span")
           .attr("class", "filter-label")
           .text(`Cluster: ${cluster}`);
-        
+
         badge.append("button")
           .attr("type", "button")
           .attr("class", "filter-status-item-remove")
@@ -2182,14 +2055,14 @@ async function init() {
     if (state.weightRange && (state.weightRange.min > 0 || state.weightRange.max < Number.POSITIVE_INFINITY)) {
       const badge = filterStatusItems.append("div")
         .attr("class", "filter-status-item filter-type-weight");
-      
+
       const minStr = state.weightRange.min.toFixed(2);
       const maxStr = state.weightRange.max === Number.POSITIVE_INFINITY ? "∞" : state.weightRange.max.toFixed(2);
-      
+
       badge.append("span")
         .attr("class", "filter-label")
         .text(`Weight: ${minStr} - ${maxStr}`);
-      
+
       badge.append("button")
         .attr("type", "button")
         .attr("class", "filter-status-item-remove")
@@ -2209,14 +2082,14 @@ async function init() {
     if (state.centralizationRange) {
       const badge = filterStatusItems.append("div")
         .attr("class", "filter-status-item filter-type-centrality");
-      
+
       const minStr = state.centralizationRange.min.toFixed(3);
       const maxStr = state.centralizationRange.max.toFixed(3);
-      
+
       badge.append("span")
         .attr("class", "filter-label")
         .text(`Centrality: ${minStr} - ${maxStr}`);
-      
+
       badge.append("button")
         .attr("type", "button")
         .attr("class", "filter-status-item-remove")
@@ -2236,12 +2109,12 @@ async function init() {
       tiers.forEach(tier => {
         const badge = filterStatusItems.append("div")
           .attr("class", "filter-status-item filter-type-centrality");
-        
+
         const label = CENTRALIZATION_TIER_LABELS[tier] || tier;
         badge.append("span")
           .attr("class", "filter-label")
           .text(`Tier: ${label}`);
-        
+
         badge.append("button")
           .attr("type", "button")
           .attr("class", "filter-status-item-remove")
@@ -2260,14 +2133,14 @@ async function init() {
     if (state.selectedIds && state.selectedIds.size > 0) {
       const badge = filterStatusItems.append("div")
         .attr("class", "filter-status-item filter-type-selection");
-      
+
       const count = state.selectedIds.size;
       const label = count === 1 ? "1 node selected" : `${count} nodes selected`;
-      
+
       badge.append("span")
         .attr("class", "filter-label")
         .text(label);
-      
+
       badge.append("button")
         .attr("type", "button")
         .attr("class", "filter-status-item-remove")
@@ -2294,7 +2167,7 @@ async function init() {
     toggles.forEach(label => {
       const badge = filterStatusItems.append("div")
         .attr("class", "filter-status-item filter-type-option");
-      
+
       badge.append("span")
         .attr("class", "filter-label")
         .text(label);
@@ -2302,8 +2175,8 @@ async function init() {
 
     // Show/hide the status bar
     const statusBar = d3.select("#filterStatusBar");
-    const hasFilters = state.languageFilter?.size > 0 
-      || state.clusterFilter?.size > 0 
+    const hasFilters = state.languageFilter?.size > 0
+      || state.clusterFilter?.size > 0
       || (state.weightRange && (state.weightRange.min > 0 || state.weightRange.max < Number.POSITIVE_INFINITY))
       || state.centralizationRange
       || state.selectedIds?.size > 0
@@ -2311,7 +2184,7 @@ async function init() {
       || !state.showEdges
       || state.useTranslationOpacity
       || state.onlySharedSelectionLinks;
-    
+
     statusBar.style("display", hasFilters ? "flex" : "none");
   };
 
@@ -2325,7 +2198,7 @@ async function init() {
     state.selectedIds.clear();
     state.focusNodeId = null;
     state.focusVisible = null;
-    
+
     // Reset UI controls
     if (state.clusterFilterController) {
       state.clusterFilterController.clear();
@@ -2369,7 +2242,7 @@ async function init() {
   const maximizeChordBtn = document.getElementById("maximizeChordBtn");
   const chordModal = document.getElementById("chordModal");
   const closeChordModal = document.getElementById("closeChordModal");
-  
+
   if (maximizeChordBtn && chordModal && closeChordModal && languageLanguageData) {
     maximizeChordBtn.addEventListener("click", () => {
       chordModal.style.display = "flex";
@@ -2386,13 +2259,13 @@ async function init() {
         }
       });
     });
-    
+
     closeChordModal.addEventListener("click", () => {
       chordModal.style.display = "none";
       // Clear the large diagram
       d3.select("#chordDiagramLarge").selectAll("*").remove();
     });
-    
+
     // Close modal when clicking outside
     chordModal.addEventListener("click", (event) => {
       if (event.target === chordModal) {
@@ -2400,7 +2273,7 @@ async function init() {
         d3.select("#chordDiagramLarge").selectAll("*").remove();
       }
     });
-    
+
     // Close modal with Escape key
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && chordModal.style.display === "flex") {
@@ -2423,10 +2296,10 @@ async function init() {
   // Maximize radial chart button handler
   const maximizeRadialBtn = document.getElementById("maximizeRadialBtn");
   const radialModal = document.getElementById("radialModal");
-  
+
   if (maximizeRadialBtn && radialModal && languageLanguageData) {
     const closeRadialModalBtn = document.getElementById("closeRadialModal");
-    
+
     maximizeRadialBtn.addEventListener("click", () => {
       radialModal.style.display = "flex";
       // Render larger radial chart in modal
@@ -2436,14 +2309,14 @@ async function init() {
         height: 600
       });
     });
-    
+
     if (closeRadialModalBtn) {
       closeRadialModalBtn.addEventListener("click", () => {
         radialModal.style.display = "none";
         d3.select("#radialChartZoomed").selectAll("*").remove();
       });
     }
-    
+
     // Close modal when clicking outside
     radialModal.addEventListener("click", (event) => {
       if (event.target === radialModal) {
@@ -2451,7 +2324,7 @@ async function init() {
         d3.select("#radialChartZoomed").selectAll("*").remove();
       }
     });
-    
+
     // Close modal with Escape key
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && radialModal.style.display === "flex") {
@@ -2556,28 +2429,28 @@ async function init() {
   function updateAuthorDetailPanel() {
     if (!authorDetailPanel) return;
     handleDetailConnectionHover(null);
-    
+
     // Get all selected nodes
     const selectedNodes = Array.from(state.selectedIds)
       .map(id => state.nodeById.get(id))
       .filter(n => n);
-    
+
     if (selectedNodes.length === 0) {
       authorDetailPanel.innerHTML =
         '<p class="author-detail-empty">Select an author to see translation stats and relationship insights.</p>';
       return;
     }
-    
+
     // Single author: show detailed view
     if (selectedNodes.length === 1) {
       renderSingleAuthorDetail(selectedNodes[0]);
       return;
     }
-    
+
     // Multiple authors: show comparison view
     renderMultiAuthorComparison(selectedNodes);
   }
-  
+
   function renderSingleAuthorDetail(node) {
     const totalTranslations = Number(node.totalWeight) || 0;
     const languages = (node.languages || [])
@@ -2613,7 +2486,7 @@ async function init() {
 
     const normalizedCentralization = Number(node.centralizationScoreNormalized);
     const rawCentralization = Number(node.centralizationScore);
-    const tier = node._centralizationTier || getCentralizationTier(getCentralizationScore(node));
+    const tier = node._centralizationTier;
     const tierLabel = CENTRALIZATION_TIER_LABELS[tier] || "Centrality tier";
     const communityId = state.communityKey != null ? node.communities?.[state.communityKey] : null;
     const communityLabel =
@@ -2633,13 +2506,13 @@ async function init() {
       : '<p class="author-detail-empty">No translation breakdown available.</p>';
     const connectionsMarkup = connections.length
       ? `<ul class="author-detail-list author-detail-connections">${connections
-          .map(
-            (entry) =>
-              `<li data-connection-id="${escapeHtml(String(entry.id))}" tabindex="0"><strong>${escapeHtml(
-                entry.label
-              )}</strong><span>${escapeHtml(entry.detail)}</span></li>`
-          )
-          .join("")}</ul>`
+        .map(
+          (entry) =>
+            `<li data-connection-id="${escapeHtml(String(entry.id))}" tabindex="0"><strong>${escapeHtml(
+              entry.label
+            )}</strong><span>${escapeHtml(entry.detail)}</span></li>`
+        )
+        .join("")}</ul>`
       : '<p class="author-detail-empty">No weighted connections recorded.</p>';
 
     authorDetailPanel.innerHTML = `
@@ -2661,13 +2534,12 @@ async function init() {
         </div>
         <div class="author-detail-metric">
           <span>Centralization</span>
-          <strong>${
-            Number.isFinite(normalizedCentralization)
-              ? normalizedCentralization.toFixed(3)
-              : Number.isFinite(rawCentralization)
-              ? rawCentralization.toFixed(3)
-              : "n/a"
-          }</strong>
+          <strong>${Number.isFinite(normalizedCentralization)
+        ? normalizedCentralization.toFixed(3)
+        : Number.isFinite(rawCentralization)
+          ? rawCentralization.toFixed(3)
+          : "n/a"
+      }</strong>
         </div>
       </div>
       <div class="author-detail-section">
@@ -2695,12 +2567,12 @@ async function init() {
       });
     }
   }
-  
+
   function renderMultiAuthorComparison(nodes) {
     const count = nodes.length;
     const names = nodes.map(n => n.label || n.id).join(", ");
     const truncatedNames = names.length > 60 ? names.substring(0, 57) + "..." : names;
-    
+
     // Calculate shared connections (intersection)
     const connectionsByAuthor = nodes.map(node => {
       const connections = new Map();
@@ -2718,7 +2590,7 @@ async function init() {
       });
       return connections;
     });
-    
+
     // Intersection: connections shared by ALL selected authors
     const sharedConnections = new Map();
     if (connectionsByAuthor.length > 0) {
@@ -2733,7 +2605,7 @@ async function init() {
         }
       });
     }
-    
+
     // Union: all unique connections
     const allConnections = new Map();
     connectionsByAuthor.forEach(authorConns => {
@@ -2745,7 +2617,7 @@ async function init() {
         }
       });
     });
-    
+
     // Calculate shared languages (intersection)
     const languagesByAuthor = nodes.map(node => {
       const langs = new Map();
@@ -2758,7 +2630,7 @@ async function init() {
       });
       return langs;
     });
-    
+
     // Intersection: languages used by ALL authors
     const sharedLanguages = new Map();
     if (languagesByAuthor.length > 0) {
@@ -2772,7 +2644,7 @@ async function init() {
         }
       });
     }
-    
+
     // Union: all unique languages
     const allLanguages = new Map();
     languagesByAuthor.forEach(authorLangs => {
@@ -2784,65 +2656,65 @@ async function init() {
         }
       });
     });
-    
+
     // Format shared connections
     const topSharedConnections = Array.from(sharedConnections.values())
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 5);
-    
+
     const sharedConnectionsMarkup = topSharedConnections.length
       ? `<ul class="author-detail-list author-detail-connections">${topSharedConnections
-          .map(entry => 
-            `<li data-connection-id="${escapeHtml(String(entry.id))}" tabindex="0">
+        .map(entry =>
+          `<li data-connection-id="${escapeHtml(String(entry.id))}" tabindex="0">
               <strong>${escapeHtml(entry.label)}</strong>
               <span>${formatNumber(entry.weight)} combined</span>
             </li>`
-          ).join("")}</ul>`
+        ).join("")}</ul>`
       : '<p class="author-detail-empty">No shared connections found.</p>';
-    
+
     // Format all connections
     const topAllConnections = Array.from(allConnections.values())
       .sort((a, b) => b.weight - a.weight)
       .slice(0, 5);
-    
+
     const allConnectionsMarkup = topAllConnections.length
       ? `<ul class="author-detail-list">${topAllConnections
-          .map(entry => 
-            `<li><strong>${escapeHtml(entry.label)}</strong><span>${formatNumber(entry.weight)} combined</span></li>`
-          ).join("")}</ul>`
+        .map(entry =>
+          `<li><strong>${escapeHtml(entry.label)}</strong><span>${formatNumber(entry.weight)} combined</span></li>`
+        ).join("")}</ul>`
       : '<p class="author-detail-empty">No connections found.</p>';
-    
+
     // Format shared languages
     const topSharedLanguages = Array.from(sharedLanguages.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
-    
+
     const sharedLanguagesMarkup = topSharedLanguages.length
       ? `<ul class="author-detail-list">${topSharedLanguages
-          .map(([lang, weight]) => 
-            `<li><strong>${escapeHtml(lang.toUpperCase())}</strong><span>${formatNumber(weight)} combined</span></li>`
-          ).join("")}</ul>`
+        .map(([lang, weight]) =>
+          `<li><strong>${escapeHtml(lang.toUpperCase())}</strong><span>${formatNumber(weight)} combined</span></li>`
+        ).join("")}</ul>`
       : '<p class="author-detail-empty">No shared languages found.</p>';
-    
+
     // Format all languages
     const topAllLanguages = Array.from(allLanguages.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
-    
+
     const allLanguagesMarkup = topAllLanguages.length
       ? `<ul class="author-detail-list">${topAllLanguages
-          .map(([lang, weight]) => 
-            `<li><strong>${escapeHtml(lang.toUpperCase())}</strong><span>${formatNumber(weight)} combined</span></li>`
-          ).join("")}</ul>`
+        .map(([lang, weight]) =>
+          `<li><strong>${escapeHtml(lang.toUpperCase())}</strong><span>${formatNumber(weight)} combined</span></li>`
+        ).join("")}</ul>`
       : '<p class="author-detail-empty">No languages found.</p>';
-    
+
     // Calculate summary metrics
     const totalTranslations = nodes.reduce((sum, n) => sum + (Number(n.totalWeight) || 0), 0);
     const avgCentralization = nodes.reduce((sum, n) => {
       const norm = Number(n.centralizationScoreNormalized);
       return sum + (Number.isFinite(norm) ? norm : 0);
     }, 0) / nodes.length;
-    
+
     authorDetailPanel.innerHTML = `
       <div class="author-detail-header">
         <div>
@@ -2882,7 +2754,7 @@ async function init() {
         ${allConnectionsMarkup}
       </div>
     `;
-    
+
     // Add hover handlers for shared connections
     const connectionItems = authorDetailPanel.querySelectorAll(
       ".author-detail-connections li[data-connection-id]"
@@ -3039,16 +2911,27 @@ async function init() {
 
     const highlightedLinks = [];
 
-    if (state.showEdges) {
-      // Draw links with weight-aware alpha for clarity
+    // Always show hovered node's outgoing edges and targets, regardless of filters or showEdges toggle
+    const hoverNodeId = state.hoverNode ? state.hoverNode.id : null;
+    if (state.showEdges || hoverNodeId) {
       state.links.forEach((link) => {
         const { sourceNode, targetNode } = link;
         if (!sourceNode || !targetNode) return;
+        // If hovering, always show outgoing edges and targets
+        let isHoverEdge = false;
+        if (hoverNodeId && sourceNode.id === hoverNodeId) {
+          isHoverEdge = true;
+        }
+        // Always require both nodes to be visible, even for hovered edges
+        if (!(isNodeVisible(state, sourceNode) && isNodeVisible(state, targetNode))) {
+          return;
+        }
         const visible =
-          link.visible &&
-          passesClusterEdgeFilter(state, link) &&
-          isNodeVisible(state, sourceNode) &&
-          isNodeVisible(state, targetNode);
+          (isHoverEdge || (
+            state.showEdges &&
+            link.visible &&
+            passesClusterEdgeFilter(state, link)
+          ));
         if (!visible) return;
         let sourceSelected = false;
         let targetSelected = false;
@@ -3061,10 +2944,23 @@ async function init() {
             return;
           }
         }
-        const intensity = Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight));
-        const alpha = 0.02 + intensity * 0.18;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        const lineWidth = (0.2 + intensity * 2) / zoomScale;
+        // Explicitly highlight outgoing links from hovered node in thick yellow
+        let edgeAlpha = 0.02 + Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight)) * 0.18;
+        let edgeColor = `rgba(255, 255, 255, ${edgeAlpha})`;
+        let thickYellow = false;
+        if (isHoverEdge) {
+          edgeColor = '#fbbf24';
+          edgeAlpha = 0.98;
+          thickYellow = true;
+        } else if (state.hoverNode && (targetNode.id === hoverNodeId)) {
+          edgeColor = '#fbbf24';
+          edgeAlpha = 0.98;
+        } else if (state.hoverNode) {
+          edgeAlpha = 0.08;
+          edgeColor = `rgba(255,255,255,${edgeAlpha})`;
+        }
+        ctx.strokeStyle = edgeColor;
+        const lineWidth = thickYellow ? Math.max(2.5, 4 / zoomScale) : (0.2 + Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight)) * 2) / zoomScale;
         ctx.lineWidth = Math.max(0.15, lineWidth);
         ctx.beginPath();
         ctx.moveTo(sourceNode.x, sourceNode.y);
@@ -3075,6 +2971,32 @@ async function init() {
           highlightedLinks.push(link);
         }
       });
+      // Track hover neighbors for fast lookup
+      function updateHoverNeighbors() {
+        // Use adjacency map for fast lookup of outgoing neighbors
+        state.hoverNeighbors = (state.hoverNode && state.adjacencyMap)
+          ? state.adjacencyMap.get(state.hoverNode.id) || new Set()
+          : null;
+      }
+
+      // Patch mousemove to update hover neighbors
+      d3.select(canvas)
+        .on("mousemove", (event) => {
+          if (!state.quadtree) return;
+          const [x, y] = screenToWorld(event);
+          const found = state.quadtree.find(x, y, 18 / (state.transform.k || 1));
+          if (found && isNodeVisible(state, found)) {
+            state.hoverNode = found;
+            updateHoverNeighbors();
+            // ...existing code...
+            // (rest of mousemove handler unchanged)
+          } else {
+            state.hoverNode = null;
+            updateHoverNeighbors();
+            hideTooltip(state.tooltip);
+          }
+          draw();
+        })
 
       if (highlightedLinks.length) {
         highlightedLinks.forEach((link) => {
@@ -3105,12 +3027,12 @@ async function init() {
 
     state.nodes.forEach((node) => {
       if (!isNodeVisible(state, node)) return;
-      const tier = node._centralizationTier || getCentralizationTier(getCentralizationScore(node));
-      const radius = tier === "central" ? 6.2 : tier === "periphery" ? 5.2 : 4.2;
+      const tier = node._centralizationTier;
+      const radius = tier === "core" ? 6.2 : tier === "periphery" ? 5.2 : 4.2;
       const color = getNodeFill(node, state);
 
       const nodeOpacity = getNodeOpacity(node, state);
-      
+
       // Draw filled circle
       ctx.save();
       ctx.globalAlpha = nodeOpacity;
@@ -3119,7 +3041,7 @@ async function init() {
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      
+
 
       const isFocus = state.focusNodeId === node.id;
       const isHover = state.hoverNode === node;
@@ -3128,20 +3050,24 @@ async function init() {
       const isDetailHover =
         detailHighlight &&
         (detailHighlight.sourceNode?.id === node.id || detailHighlight.targetNode?.id === node.id);
-      if (isFocus || isHover || isSelected || isSearchMatch || isDetailHover) {
-        const strokeWidth = isFocus || isSelected || isSearchMatch ? Math.max(1.5, 3 / zoomScale) : Math.max(1, 2 / zoomScale);
+      // Highlight target nodes of hovered node with yellow border (efficient lookup)
+      const isHoverNeighbor = state.hoverNode && state.hoverNeighbors && state.hoverNeighbors.has(node.id);
+      if (isFocus || isHover || isSelected || isSearchMatch || isDetailHover || isHoverNeighbor) {
+        let strokeWidth = isFocus || isSelected || isSearchMatch ? Math.max(1.5, 3 / zoomScale) : Math.max(1, 2 / zoomScale);
+        if (isHoverNeighbor) strokeWidth = Math.max(2.5, 3.5 / zoomScale);
         ctx.lineWidth = strokeWidth;
         if (isSelected) ctx.strokeStyle = "#22c55e";
         else if (isDetailHover) ctx.strokeStyle = "#fbbf24";
         else if (isSearchMatch) ctx.strokeStyle = "#38bdf8";
-        else ctx.strokeStyle = tier === "central" ? "#f8fafc" : "#cbd5f5";
+        else if (isHoverNeighbor) ctx.strokeStyle = "#fbbf24";
+        else ctx.strokeStyle = tier === "core" ? "#f8fafc" : "#cbd5f5";
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius + 1.3, 0, Math.PI * 2);
         ctx.stroke();
       }
-
-      // Show labels only for selected or focused nodes
-      if (isSelected || isFocus) {
+      // Show labels for selected, focused, hovered node, and for hover neighbors
+      const showLabel = isSelected || isFocus || isHover || isHoverNeighbor;
+      if (showLabel) {
         ctx.fillStyle = "#e5e7eb";
         ctx.fillText(node.label, node.x, node.y - radius - 2);
       }
@@ -3174,13 +3100,13 @@ async function init() {
 
   function isNodeVisible(state, node) {
     if (!node.visible) return false;
-    
+
     // Check tier filter
     if (state.tierFilter && state.tierFilter.size > 0) {
-      const tier = node._centralizationTier || getCentralizationTier(getCentralizationScore(node));
+      const tier = node._centralizationTier;
       if (!state.tierFilter.has(tier)) return false;
     }
-    
+
     if (state.languageFilter && state.languageFilter.size) {
       const languageSet = ensureNodeLanguageSet(node);
       let hasLanguage = false;
@@ -3225,47 +3151,26 @@ async function init() {
       const found = state.quadtree.find(x, y, 18 / (state.transform.k || 1));
       if (found && isNodeVisible(state, found)) {
         state.hoverNode = found;
-        const communityId = found.communities?.[state.communityKey];
-        let centralityLine = "";
-        const metric = state.centralityMetric;
-        if (metric && typeof found.centrality?.[metric] === "number") {
-          const score = found.centrality[metric];
-          const tier = found.centralityTier?.[metric];
-          const tierLabel =
-            tier === "central" ? "Central core" : tier === "periphery" ? "Periphery" : "Outer periphery";
-          centralityLine = `<br/>${formatCentralityLabel(metric)}: ${score.toFixed(3)}$${
-            tier ? ` (${tierLabel})` : ""
-          }`;
-        }
-        let centralizationLine = "";
-        const normalizedCentralization = Number(found.centralizationScoreNormalized);
-        const rawCentralization = Number(found.centralizationScore);
-        if (Number.isFinite(normalizedCentralization) || Number.isFinite(rawCentralization)) {
-          const parts = [];
-          if (Number.isFinite(normalizedCentralization)) {
-            parts.push(`${normalizedCentralization.toFixed(3)} normalized`);
-          }
-          if (Number.isFinite(rawCentralization)) {
-            parts.push(`${rawCentralization.toFixed(3)} weighted`);
-          }
-          const tierLabel =
-            CENTRALIZATION_TIER_LABELS[
-              found._centralizationTier || getCentralizationTier(normalizedCentralization)
-            ];
-          const tierSuffix = tierLabel ? ` • ${tierLabel}` : "";
-          centralizationLine = `<br/>Centralization: ${parts.join(" • ")}${tierSuffix}`;
-        }
+        // Tooltip: show languageCommunity as community, and tier label
+        const communityValue = found.languageCommunity != null ? String(found.languageCommunity) : "n/a";
+        let tierLabel = "";
+        let tierColor = "#64748b";
+        if (found._centralizationTier === "core") { tierLabel = "Core (community 0)"; tierColor = "#fbbf24"; }
+        else if (found._centralizationTier === "periphery") { tierLabel = "Periphery (community 1/2)"; tierColor = "#60a5fa"; }
+        else { tierLabel = "Outer (other)"; tierColor = "#64748b"; }
         const languages = (found.languages || [])
           .slice()
           .sort((a, b) => b.weight - a.weight)
-          .map((entry) => `${entry.language} (${entry.weight})`)
+          .map((entry) => `${entry.language} <span style='color:#94a3b8'>(${entry.weight})</span>`)
           .slice(0, 6)
           .join(", ");
         showTooltip(
           state.tooltip,
-          `<strong>${found.label}</strong><br/>Total translations: ${formatNumber(found.totalWeight)}<br/>Languages: ${
-            languages || "n/a"
-          }${state.communityKey ? `<br/>Community: ${communityId ?? "n/a"}` : ""}${centralityLine}${centralizationLine}`,
+          `<div style="font-size:1.08em;"><strong>${found.label}</strong></div>` +
+          `<div style="margin:4px 0 2px 0;"><b>Total translations:</b> <span style='color:#fbbf24'>${formatNumber(found.totalWeight)}</span></div>` +
+          `<div style="margin:2px 0 2px 0;"><b>Languages:</b> ${languages || "<span style='color:#94a3b8'>n/a</span>"}</div>` +
+          `<div style="margin:2px 0 2px 0;"><b>Community:</b> <span style='color:#38bdf8;font-weight:600;'>${communityValue}</span></div>` +
+          `<div style="margin:2px 0 0 0;"><b>Tier:</b> <span style='color:${tierColor};font-weight:600;'>${tierLabel}</span></div>`,
           event
         );
       } else {
@@ -3284,10 +3189,10 @@ async function init() {
       const rect = canvas.getBoundingClientRect();
       const clickX = event.clientX - rect.left;
       const clickY = event.clientY - rect.top;
-      
+
       for (const region of state.legendTierRegions) {
         if (clickX >= region.x && clickX <= region.x + region.width &&
-            clickY >= region.y && clickY <= region.y + region.height) {
+          clickY >= region.y && clickY <= region.y + region.height) {
           // Toggle tier filter
           if (state.tierFilter.has(region.tier)) {
             state.tierFilter.delete(region.tier);
@@ -3299,7 +3204,7 @@ async function init() {
           return;
         }
       }
-      
+
       if (!state.quadtree) return;
       const [x, y] = screenToWorld(event);
       const found = state.quadtree.find(x, y, 18 / (state.transform.k || 1));
@@ -3363,49 +3268,15 @@ async function init() {
       state.colorScale,
       (selection) => {
         state.clusterFilter = selection;
-        console.log("[cluster filter] selection:", Array.from(selection));
-
-        // Mark debug match flags on nodes so we can visually inspect which nodes are considered matched
-        try {
-          const selSet = state.clusterFilter || new Set();
-          state.nodes.forEach(n => {
-            const k = getLanguageCommunityKey(n);
-            n._debugMatched = k !== null && selSet.has(String(k));
-          });
-        } catch (e) {
-          console.warn("[cluster filter] debug match flags failed", e);
-        }
-
         updateClusterVisibility(state);
-        // Debug: count nodes that match the selected keys by computing language community key
-        try {
-          const sel = state.clusterFilter ? Array.from(state.clusterFilter) : [];
-          const matchedNodes = state.nodes.filter(n => {
-            const key = getLanguageCommunityKey(n);
-            return key !== null && sel.indexOf(String(key)) !== -1;
-          });
-          console.log("[cluster filter] matched nodes by key:", matchedNodes.length, "/", state.nodes.length);
-          console.log("[cluster filter] matched sample:", matchedNodes.slice(0,10).map(n=>({id:n.id, key:getLanguageCommunityKey(n), tier:n._centralizationTier}))); 
-          const visible = state.nodes.filter(n => n.clusterVisible).length;
-          console.log("[cluster filter] clusterVisible count:", visible, "; sample:", state.nodes.filter(n => n.clusterVisible).slice(0,10).map(n=>({id:n.id, key:getLanguageCommunityKey(n), tier:n._centralizationTier})));
-        } catch (e) {
-          console.warn("[cluster filter] debug failed", e);
-        }
+        // Only process visible nodes for layout and display
+        const visibleNodes = state.nodes.filter(n => n.clusterVisible !== false);
+        // Only re-layout visible nodes within fixed rings (do not update ring radii)
+        projectToRings(visibleNodes, state.rings, state.communityKey);
+        state.quadtree = d3.quadtree(visibleNodes, (d) => d.x, (d) => d.y);
         updateAuthorDetailPanel();
         updateFilterStatus();
         draw();
-
-        // Also print a small breakdown of counts per languageCommunity key (debug)
-        try {
-          const counts = {};
-          state.nodes.forEach(n => {
-            const k = getLanguageCommunityKey(n) || '_noise';
-            counts[k] = (counts[k] || 0) + 1;
-          });
-          console.log('[cluster filter] counts per key (sample):', Object.entries(counts).slice(0,10));
-        } catch (e) {
-          /* ignore */
-        }
       }
     );
     state.clusterFilterController = controller;
@@ -3482,8 +3353,8 @@ async function init() {
     activeWeightRange && activeWeightRange.length === 2
       ? activeWeightRange
       : weightExtent && weightExtent.every((value) => Number.isFinite(value))
-      ? weightExtent
-      : [0, Number.POSITIVE_INFINITY];
+        ? weightExtent
+        : [0, Number.POSITIVE_INFINITY];
   applyWeightFilterAndRedraw(fallbackRange);
   applySearchQuery(authorSearchInput?.value || "");
 
@@ -3500,7 +3371,7 @@ async function init() {
   }
 
   if (showEdgesToggle) {
-    showEdgesToggle.checked = true;
+    showEdgesToggle.checked = false;
     showEdgesToggle.addEventListener("change", () => {
       state.showEdges = Boolean(showEdgesToggle.checked);
       updateFilterStatus();
@@ -3536,6 +3407,6 @@ init().catch((error) => {
   banner.style.padding = "1rem";
   banner.style.margin = "1rem";
   banner.style.borderRadius = "8px";
-  banner.textContent = `Unable to load data. Run prepare_data.py with community and centrality metrics enabled. (${error.message})`;
+  banner.textContent = `Error Occurred: (${error.message})`;
   main.prepend(banner);
 });
