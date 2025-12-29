@@ -761,7 +761,7 @@ main {
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 0.65rem;
   padding: 0.6rem 0.7rem;
-  background: rgba(15, 23, 42, 0.8);
+  background: linear-gradient(135deg, rgba(30,41,59,0.93) 80%, rgba(59,130,246,0.07) 100%);
   cursor: pointer;
   transition: border-color 0.2s, transform 0.2s;
   color: #f1f5f9;

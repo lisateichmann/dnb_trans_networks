@@ -31,6 +31,7 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: 'index.html',
+      scriptLoading: 'defer',
     }),
     new CopyWebpackPlugin({
       patterns: [

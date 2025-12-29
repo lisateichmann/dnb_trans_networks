@@ -1,5 +1,4 @@
 import './styles.css';
-import './app.js';
 import { createTooltip, showTooltip, hideTooltip, formatNumber } from "../src/utils.js";
 
 const DATA_URL = new URL("../data/author_author_graph.json", import.meta.url).href;
@@ -45,6 +44,13 @@ const TIER_NODE_COLORS = {
 // Global language color scale for consistent colors across visualizations
 let LANGUAGE_COLOR_SCALE = null;
 
+const ZOOM_EXTENT = [0.4, 4];
+const MAX_LANGUAGE_RATIO_BARS = 120;
+const MAX_LANGUAGE_RATIO_DISPLAY = MAX_LANGUAGE_RATIO_BARS;
+const MAX_CLUSTER_LANGUAGE_CHIPS = 6;
+const MAX_SEARCH_SUGGESTIONS = 8;
+const MAX_SEARCH_HIGHLIGHTS = 25;
+
 function getLanguageColorScale(languageIds) {
   if (!LANGUAGE_COLOR_SCALE) {
     const sortedIds = [...languageIds].sort();
@@ -54,14 +60,6 @@ function getLanguageColorScale(languageIds) {
   }
   return LANGUAGE_COLOR_SCALE;
 }
-
-const CENTRALITY_LABELS = {
-  degree: "Degree centrality",
-  weightedDegree: "Weighted degree",
-  betweenness: "Betweenness centrality",
-  closeness: "Closeness centrality",
-  eigenvector: "Eigenvector centrality",
-};
 
 let centralizationThresholds = { ...DEFAULT_CENTRALIZATION_THRESHOLDS };
 
@@ -137,13 +135,6 @@ function findAuthorMatches(nodes, query) {
 
   return matches.map((entry) => entry.node);
 }
-
-const ZOOM_EXTENT = [0.4, 4];
-const MAX_LANGUAGE_RATIO_BARS = 120;
-const MAX_LANGUAGE_RATIO_DISPLAY = MAX_LANGUAGE_RATIO_BARS;
-const MAX_CLUSTER_LANGUAGE_CHIPS = 6;
-const MAX_SEARCH_SUGGESTIONS = 8;
-const MAX_SEARCH_HIGHLIGHTS = 25;
 
 let languageRatioCache = null;
 let languageRatioPromise = null;
@@ -816,18 +807,29 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
   const summaries = new Map();
 
   nodes.forEach((node) => {
-    const cid = node.communities?.[communityKey];
-    if (cid === undefined || cid === null || cid < 0) return;
+    // Support multi-community (bridge) assignments as an array or string
+    let commKey = node.languageCommunity;
+    if (!commKey) {
+      // fallback to old logic if not present
+      const cid = node.communities?.[communityKey];
+      if (cid === undefined || cid === null || cid < 0) return;
+      commKey = String(cid);
+    }
+    // If commKey is an array, join with arrows
+    if (Array.isArray(commKey)) {
+      commKey = commKey.join('→');
+    }
+    if (!commKey) return;
     ensureNodeLanguageSet(node);
-    if (!summaries.has(cid)) {
-      summaries.set(cid, {
-        id: cid,
+    if (!summaries.has(commKey)) {
+      summaries.set(commKey, {
+        id: commKey,
         authorCount: 0,
         totalLanguageWeight: 0,
         languageCounts: new Map(),
       });
     }
-    const summary = summaries.get(cid);
+    const summary = summaries.get(commKey);
     summary.authorCount += 1;
     (node.languages || []).forEach((entry) => {
       const key = normalizeLanguageKey(entry.language);
@@ -861,7 +863,20 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
         languageSet: new Set(languages.map((d) => d.key)),
       };
     })
-    .sort((a, b) => a.id - b.id);
+    // Custom sort: 0,1,2, 0→1, 0→2, 1→2, 0→1→2
+    .sort((a, b) => {
+      const order = ["0","1","2","0→1","0→2","1→2","0→1→2"];
+      const aIdx = order.indexOf(a.id);
+      const bIdx = order.indexOf(b.id);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+      // fallback: single first, then bridges, then lexically
+      const aParts = a.id.split('→').length;
+      const bParts = b.id.split('→').length;
+      if (aParts !== bParts) return aParts - bParts;
+      return a.id.localeCompare(b.id, undefined, {numeric: true});
+    });
 }
 
 function renderClusterLanguageFilter(container, summaries, colorScale, onSelectionChange) {
@@ -882,7 +897,19 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     .data(summaries, (d) => d.id)
     .join("button")
     .attr("type", "button")
-    .attr("class", "cluster-filter-card");
+    .attr("class", "cluster-filter-card")
+    .style("background", d => {
+      // Use the colorScale for the main color, with more transparency for a lighter tint
+      const base = colorScale(d.id);
+      // Convert hex to rgba with lower alpha
+      if (/^#[0-9a-fA-F]{6}$/.test(base)) {
+        const r = parseInt(base.slice(1,3),16);
+        const g = parseInt(base.slice(3,5),16);
+        const b = parseInt(base.slice(5,7),16);
+        return `rgba(${r},${g},${b},0.10)`;
+      }
+      return base;
+    });
 
   cards.each(function (d) {
     const card = d3.select(this);
@@ -891,7 +918,8 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     header
       .append("strong")
       .html(
-        `<span class="cluster-filter-swatch" style="background:${colorScale(d.id)}"></span>Community ${d.id}`
+        `<span class="cluster-filter-swatch" style="background:${colorScale(d.id)}"></span>` +
+        (d.id.includes('→') ? `Bridge ${d.id}` : `Community ${d.id}`)
       );
     header.append("span").text(`${d.authorCount} authors`);
 
