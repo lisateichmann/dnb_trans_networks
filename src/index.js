@@ -3481,14 +3481,17 @@ async function init() {
   const downloadPngBtn = document.getElementById("downloadPngBtn");
   if (downloadPngBtn) {
     downloadPngBtn.addEventListener("click", () => {
-      // Create a temporary canvas for export
+      // Create a temporary canvas for export at 3x resolution for better quality
+      const scale = 3;
       const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = state.canvas.width;
-      tempCanvas.height = state.canvas.height;
+      tempCanvas.width = state.canvas.width * scale;
+      tempCanvas.height = state.canvas.height * scale;
       const tempCtx = tempCanvas.getContext("2d");
 
-      // Copy current canvas content onto transparent background
+      // Copy current canvas content onto transparent background with scaling
+      tempCtx.scale(scale, scale);
       tempCtx.drawImage(state.canvas, 0, 0);
+      tempCtx.setTransform(1, 0, 0, 1, 0, 0);
 
       // Replace dark background and light text colors
       const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
@@ -3617,13 +3620,15 @@ async function init() {
       textEl.style.fill = "#000000";
     });
 
+    // Create canvas at 2x resolution for better quality
+    const scale = 2;
     const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
     const ctx = canvas.getContext("2d", { alpha: true });
 
     // Transparent background
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Serialize and render the modified SVG
     const svgString = new XMLSerializer().serializeToString(svgClone);
@@ -3632,6 +3637,7 @@ async function init() {
 
     const img = new Image();
     img.onload = function () {
+      ctx.scale(scale, scale);
       ctx.drawImage(img, 0, 0);
       URL.revokeObjectURL(url);
 
