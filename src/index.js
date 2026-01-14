@@ -991,7 +991,7 @@ function drawLegend(ctx, width, height, communities, colorScale) {
   if (CENTRALITY_TIER_ORDER.length) {
     y += 6;
     ctx.fillStyle = "#e5e7eb";
-    ctx.fillText("Centralization tiers (click to filter)", startX, y);
+    ctx.fillText("LanguageCentrality tiers (click to filter)", startX, y);
     y += lineHeight;
 
     CENTRALITY_TIER_ORDER.forEach((tier) => {
@@ -1812,11 +1812,11 @@ async function init() {
   const updateCentralizationRangeLabel = (range) => {
     if (!centralizationRangeLabel) return;
     if (!Array.isArray(range) || range.length !== 2) {
-      centralizationRangeLabel.textContent = "Showing authors across all centralization scores.";
+      centralizationRangeLabel.textContent = "Showing authors across all languageCentrality scores.";
       return;
     }
     const [start, end] = range;
-    centralizationRangeLabel.textContent = `Showing authors with scores ${formatCentralizationValue(
+    centralizationRangeLabel.textContent = `Showing authors with languageCentrality scores ${formatCentralizationValue(
       start
     )}–${formatCentralizationValue(end)}`;
   };
@@ -2082,17 +2082,17 @@ async function init() {
         });
     }
 
-    // Centralization range filter
+    // LanguageCentrality range filter
     if (state.centralizationRange) {
       const badge = filterStatusItems.append("div")
-        .attr("class", "filter-status-item filter-type-centrality");
+        .attr("class", "filter-status-item filter-type-languagecentrality");
 
       const minStr = state.centralizationRange.min.toFixed(3);
       const maxStr = state.centralizationRange.max.toFixed(3);
 
       badge.append("span")
         .attr("class", "filter-label")
-        .text(`Centrality: ${minStr} - ${maxStr}`);
+        .text(`LanguageCentrality: ${minStr} - ${maxStr}`);
 
       badge.append("button")
         .attr("type", "button")
@@ -2112,7 +2112,7 @@ async function init() {
       const tiers = Array.from(state.tierFilter).sort();
       tiers.forEach(tier => {
         const badge = filterStatusItems.append("div")
-          .attr("class", "filter-status-item filter-type-centrality");
+          .attr("class", "filter-status-item filter-type-languagecentrality");
 
         const label = CENTRALIZATION_TIER_LABELS[tier] || tier;
         badge.append("span")

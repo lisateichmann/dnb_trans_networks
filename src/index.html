@@ -20,8 +20,13 @@
               <p>
                 Bibliographic translation data from national libraries often renders translational processes and mediating actors largely invisible, limiting our ability to study how literary works circulate across linguistic communities. Building on Heilbron’s centre–periphery model of translation flows, this project visualizes translation networks derived from 31,519 German-language fiction titles by 3,986 authors translated into eighty-one languages, using data from the German National Library (Deutsche Nationalbibliothek). The visualization models translation as a multi-level network connecting authors and languages, revealing how individual authors mediate between central and peripheral language communities.
               </p>
+              <hr style="border:0;height:0.5px;background:#ddd;margin:0.75rem 0;" />
               <p>
                 The interactive system emphasizes author and language translation centralization: authors are arranged in concentric rings representing centrality tiers and color-coded by detected communities, making visible canonical authors that bridge linguistic cores and peripheries as well as translational authors operating within specific regions of the network. Linked histograms, language popularity charts, and edge-weight filters allow users to explore how translation dominance, shared language corridors, and author communities shape the structure of the network. By combining network analysis with coordinated visual encodings and dynamic interaction, the visualization makes translational transfer, authorial mediation, and language hierarchies perceptible within large-scale bibliographic data.
+              </p>
+              <hr style="border:0;height:0.5px;background:#ddd;margin:0.75rem 0;" />
+              <p>
+                The dataset was derived from sources in the public domain: Österreichische Nationalbibliothek. "Katalog." Accessed January 28, 2021. <a href="https://labs.onb.ac.at/de/dataset/catalogue/" target="_blank" rel="noopener noreferrer">https://labs.onb.ac.at/de/dataset/catalogue/</a>. The full bibliographic notes are available with a data quality assessment here: <a href="https://doi.org/10.7910/DVN/LJFLL" target="_blank" rel="noopener noreferrer">https://doi.org/10.7910/DVN/LJFLL</a>.
               </p>
             </div>
           </div>
@@ -44,10 +49,10 @@
                 </div>
               </label>
               <label class="centralization-block histogram-control control-card">
-                Centralization score window (brush to focus authors)
+                (Normalized) LanguageCentrality score window (brush to focus authors)
                 <div id="centralizationHistogram" class="histogram large brushable"></div>
                 <div id="centralizationRangeValue" class="selection-hint">
-                  Showing authors across all centralization scores.
+                  Showing authors across all languageCentrality scores.
                 </div>
                 <div id="centralizationStats" class="selection-hint"></div>
               </label>
@@ -116,7 +121,7 @@
           </div>
           <div class="chord-diagram-section">
             <div class="chord-diagram-header">
-              <h2>Language translation flows</h2>
+              <h2>Shared Authors by Language</h2>
               <button id="maximizeChordBtn" type="button" class="maximize-button" title="Maximize chart" aria-label="Maximize language flow chart">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
@@ -128,7 +133,7 @@
           </div>
           <div class="chord-diagram-section">
             <div class="chord-diagram-header">
-              <h2>German translation flow</h2>
+              <h2>Target Languages</h2>
               <button id="maximizeRadialBtn" type="button" class="maximize-button" title="Maximize radial chart" aria-label="Maximize radial chart">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/>
@@ -136,7 +141,7 @@
               </button>
             </div>
             <div id="radialChart" class="radial-chart-container"></div>
-            <div class="chord-diagram-hint">Radial view showing authors translating from German to target languages.</div>
+            <div class="chord-diagram-hint">Radial view showing n of authors and titles per target language.</div>
           </div>
         </aside>
       </div>
@@ -144,7 +149,7 @@
     <div id="chordModal" class="chord-modal" style="display: none;">
       <div class="chord-modal-content">
         <div class="chord-modal-header">
-          <h2>Language Translation Flows</h2>
+          <h2>Shared Authors by Language</h2>
           <button id="closeChordModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
             <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
               <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
@@ -158,7 +163,7 @@
     <div id="radialModal" class="chord-modal" style="display: none;">
       <div class="chord-modal-content">
         <div class="chord-modal-header">
-          <h2>German Translation Flow</h2>
+          <h2>Target Languages</h2>
           <button id="closeRadialModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
             <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
               <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
@@ -166,7 +171,7 @@
           </button>
         </div>
         <div id="radialChartZoomed" class="radial-chart-zoomed"></div>
-        <div class="chord-diagram-hint">Radial view with German at center showing translation flows to target languages.</div>
+        <div class="chord-diagram-hint">Radial view showing n of authors and titles per target language.</div>
       </div>
     </div>
     <footer class="site-footer">
