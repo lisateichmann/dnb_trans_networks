@@ -1,15 +1,21 @@
 # DNB Translation Networks
 
-A network analysis and interactive visualization project exploring German fiction translation patterns using data from the German National Library (Deutsche Nationalbibliothek).
+A network analysis and interactive visualization project exploring the transfer routes and canons of German fiction in translation (translated fiction originally published in German) using bibliographic data from the German National Library (Deutsche Nationalbibliothek, DNB).
+
+## Data source
+
+The dataset was derived from sources in the public domain: Österreichische Nationalbibliothek. “Katalog.” Accessed January 28, 2021. https://labs.onb.ac.at/de/dataset/catalogue/.
+The full bibliographic notes are available with a data quality assesment here: https://doi.org/10.7910/DVN/LJFLL
+If you re-use any of the data please cite: Teichmann, Lisa (2025) ‘The “Mapping German Fiction in Translation” Dataset: Data Collection, Scope, and Data Quality’, Journal of Cultural Analytics, 10/1, https://doi.org/10.22148/001c.128010.
 
 
 ## Project Overview
 
-This project analyzes the translation networks of German literature by examining relationships between authors, languages, and their translation patterns. It constructs three interconnected network representations:
+This project analyzes the transfer networks of German literature in translation by examining relationships between authors and languages. It constructs three interconnected network representations:
 
 1. **Author-Language Network** (bipartite): Maps authors to the languages their works have been translated into
-2. **Author-Author Network** (unimodal): Connects authors who share common translation languages, revealing communities and influence patterns
-3. **Language-Language Network**: Links languages that share translated authors, showing translation corridors and flows
+2. **Author-Author Network** (unimodal): Connects authors who share common translation languages, revealing central authors in the DNB's collection
+3. **Language-Language Network**: Links languages that share translated authors, showing relations between target languages
 
 
 The analysis pipeline combines Python-based network construction and analysis with:
@@ -19,7 +25,7 @@ The analysis pipeline combines Python-based network construction and analysis wi
 ## Project Structure
 
 ```
-├── data.csv                          # Source translation data
+├── data.csv                          # Source translation data, author names and target languages, one line represents one translated title
 ├── prepare_data.py                   # Network construction and analysis
 ├── analyze_networks.py               # Statistical analysis and plotting
 ├── extract_csv.py                    # Export CSVs from network JSONs for tabular analysis
