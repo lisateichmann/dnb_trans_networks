@@ -666,6 +666,29 @@ main {
   transform: scale(1.1);
 }
 
+.top-authors-button {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.top-authors-button:hover {
+  background: #334155;
+  border-color: #475569;
+}
+
+.top-authors-button.active {
+  background: #0e7490;
+  color: #fff;
+  border-color: #0e7490;
+}
+
 .chart-header {
   display: flex;
   flex-wrap: wrap;

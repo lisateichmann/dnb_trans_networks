@@ -21,6 +21,30 @@ const COMMUNITY_COLORS = [
 ];
 
 const CENTRALITY_TIER_ORDER = ["outer", "periphery", "core"];
+
+const TOP_20_AUTHORS = [
+  "Hesse,Hermann",
+  "Kafka,Franz",
+  "Goethe,JohannWolfgangvon",
+  "Mann,Thomas",
+  "Bernhard,Thomas",
+  "Handke,Peter",
+  "Rilke,RainerMaria",
+  "Zweig,Stefan",
+  "Konsalik,HeinzG.",
+  "Roth,Joseph",
+  "Courths-Mahler,Hedwig",
+  "Remarque,ErichMaria",
+  "Link,Charlotte",
+  "Grass,Günter",
+  "Böll,Heinrich",
+  "Brecht,Bertolt",
+  "Jelinek,Elfriede",
+  "Dürrenmatt,Friedrich",
+  "Walser,Robert",
+  "Hoffmann,E.T.A."
+];
+
 const MIN_TIER_BAND_RATIO = 0.12;
 const DEFAULT_CENTRALIZATION_THRESHOLDS = {
   core: 8.0,
@@ -390,10 +414,12 @@ function projectToRings(nodes, rings, communityKey) {
     // Assign centralization tier strictly by languageCommunity (string)
     const comm = node.languageCommunity ? node.languageCommunity : "";
 
-    if (comm === "0") {
+    if (comm === "1") {
       node._centralizationTier = 'core';
-    } else if (comm === "1" || comm === "2") {
+    } else if (comm === "2") {
       node._centralizationTier = 'periphery';
+    } else if (comm === "0") {
+      node._centralizationTier = 'outer';
     } else {
       node._centralizationTier = 'outer';
     }
@@ -1781,6 +1807,7 @@ async function init() {
     tierFilter: new Set(),
     legendTierRegions: [],
     adjacencyMap,
+    top20Filter: false,
   };
 
   const allWeights = links
@@ -2167,6 +2194,7 @@ async function init() {
     if (!state.showEdges) toggles.push("Edges hidden");
     if (state.useTranslationOpacity) toggles.push("Translation opacity");
     if (state.onlySharedSelectionLinks) toggles.push("Shared links only");
+    if (state.top20Filter) toggles.push("Top 20 authors");
 
     toggles.forEach(label => {
       const badge = filterStatusItems.append("div")
@@ -2187,7 +2215,8 @@ async function init() {
       || state.tierFilter?.size > 0
       || !state.showEdges
       || state.useTranslationOpacity
-      || state.onlySharedSelectionLinks;
+      || state.onlySharedSelectionLinks
+      || state.top20Filter;
 
     statusBar.style("display", hasFilters ? "flex" : "none");
   };
@@ -2202,10 +2231,16 @@ async function init() {
     state.selectedIds.clear();
     state.focusNodeId = null;
     state.focusVisible = null;
+    state.top20Filter = false;
 
     // Reset UI controls
     if (state.clusterFilterController) {
       state.clusterFilterController.clear();
+    }
+    const top20AuthorsBtn = document.getElementById("top20AuthorsBtn");
+    if (top20AuthorsBtn) {
+      top20AuthorsBtn.textContent = "Show Top 20 Authors";
+      top20AuthorsBtn.classList.remove("active");
     }
     updateLanguageRatioFilterDisplay();
     filterByWeightState(state, state.weightRange);
@@ -3105,6 +3140,12 @@ async function init() {
   function isNodeVisible(state, node) {
     if (!node.visible) return false;
 
+    // Check top 20 authors filter
+    if (state.top20Filter) {
+      const authorName = node.id || "";
+      if (!TOP_20_AUTHORS.includes(authorName)) return false;
+    }
+
     // Check tier filter
     if (state.tierFilter && state.tierFilter.size > 0) {
       const tier = node._centralizationTier;
@@ -3387,6 +3428,17 @@ async function init() {
     translationOpacityToggle.checked = state.useTranslationOpacity;
     translationOpacityToggle.addEventListener("change", () => {
       state.useTranslationOpacity = Boolean(translationOpacityToggle.checked);
+      updateFilterStatus();
+      draw();
+    });
+  }
+
+  const top20AuthorsBtn = document.getElementById("top20AuthorsBtn");
+  if (top20AuthorsBtn) {
+    top20AuthorsBtn.addEventListener("click", () => {
+      state.top20Filter = !state.top20Filter;
+      top20AuthorsBtn.textContent = state.top20Filter ? "Show All Authors" : "Show Top 20 Authors";
+      top20AuthorsBtn.classList.toggle("active", state.top20Filter);
       updateFilterStatus();
       draw();
     });
