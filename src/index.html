@@ -116,6 +116,9 @@
               <div id="authorSearchSuggestions" class="search-suggestions"></div>
               <div class="selection-hint">Type to highlight matches. Press Enter to jump to the top match.</div>
             </label>
+            <button id="downloadPngBtn" type="button" class="download-png-button" title="Download visualization as PNG">
+              📥 Download PNG
+            </button>
           </div>
           <div id="clusterChart" class="chart" style="height: 70vh; min-height: 520px"></div>
         </section>
@@ -154,11 +157,16 @@
       <div class="chord-modal-content">
         <div class="chord-modal-header">
           <h2>Shared Authors by Language</h2>
-          <button id="closeChordModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
-            </svg>
-          </button>
+          <div class="chord-modal-actions">
+            <button id="downloadChordPngBtn" type="button" class="download-png-button" title="Download chart as PNG">
+              📥 Download PNG
+            </button>
+            <button id="closeChordModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div id="chordDiagramLarge" class="chord-diagram-large"></div>
         <div class="chord-diagram-hint">Hover to see flows. Click arc to filter authors by language (Ctrl+click for multiple).</div>
@@ -168,11 +176,16 @@
       <div class="chord-modal-content">
         <div class="chord-modal-header">
           <h2>Target Languages</h2>
-          <button id="closeRadialModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
-            </svg>
-          </button>
+          <div class="chord-modal-actions">
+            <button id="downloadRadialPngBtn" type="button" class="download-png-button" title="Download chart as PNG">
+              📥 Download PNG
+            </button>
+            <button id="closeRadialModal" type="button" class="chord-modal-close" title="Close" aria-label="Close modal">
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div id="radialChartZoomed" class="radial-chart-zoomed"></div>
         <div class="chord-diagram-hint">Radial view showing n of authors and titles per target language.</div>

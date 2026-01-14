@@ -702,6 +702,24 @@ main {
   min-width: 260px;
 }
 
+.download-png-button {
+  padding: 0.5rem 1rem;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.download-png-button:hover {
+  background: #334155;
+  border-color: #475569;
+  color: #cbd5f1;
+}
+
 .selection-hint kbd {
   background: #111827;
   border-radius: 4px;
@@ -1056,6 +1074,14 @@ main {
   margin: 0;
   color: #f1f5f9;
   font-size: 1.25rem;
+  flex: 1;
+}
+
+.chord-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
 }
 
 .chord-modal-close {
@@ -1112,18 +1138,21 @@ main {
 }
 
 .radial-chart-zoomed {
-  width: 100%;
-  height: 600px;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  overflow: auto;
+  min-height: 0;
 }
 
 .radial-chart-container svg,
 .radial-chart-zoomed svg {
   max-width: 100%;
+  max-height: 100%;
   height: auto;
+  width: auto;
 }
 
 .filter-status-bar {

@@ -2983,24 +2983,25 @@ async function init() {
             return;
           }
         }
-        // Explicitly highlight outgoing links from hovered node in thick yellow
-        let edgeAlpha = 0.02 + Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight)) * 0.18;
+        // Explicitly highlight outgoing links from hovered node with subtle yellow
+        let edgeAlpha = 0.01 + Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight)) * 0.08;
         let edgeColor = `rgba(255, 255, 255, ${edgeAlpha})`;
         let thickYellow = false;
         if (isHoverEdge) {
           edgeColor = '#fbbf24';
-          edgeAlpha = 0.98;
+          edgeAlpha = 0.35;
           thickYellow = true;
         } else if (state.hoverNode && (targetNode.id === hoverNodeId)) {
           edgeColor = '#fbbf24';
-          edgeAlpha = 0.98;
+          edgeAlpha = 0.35;
         } else if (state.hoverNode) {
-          edgeAlpha = 0.08;
+          edgeAlpha = 0.008;
           edgeColor = `rgba(255,255,255,${edgeAlpha})`;
         }
         ctx.strokeStyle = edgeColor;
-        const lineWidth = thickYellow ? Math.max(2.5, 4 / zoomScale) : (0.2 + Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight)) * 2) / zoomScale;
-        ctx.lineWidth = Math.max(0.15, lineWidth);
+        const isHighlighted = isHoverEdge || (state.hoverNode && targetNode.id === hoverNodeId);
+        const lineWidth = thickYellow ? Math.max(0.8, 1.5 / zoomScale) : (0.1 + Math.min(1, Math.max(0.05, link.weight / state.maxLinkWeight)) * 1.2) / zoomScale;
+        ctx.lineWidth = state.hoverNode && !isHighlighted ? Math.max(0.05, lineWidth * 0.3) : Math.max(0.1, lineWidth);
         ctx.beginPath();
         ctx.moveTo(sourceNode.x, sourceNode.y);
         ctx.lineTo(targetNode.x, targetNode.y);
@@ -3444,12 +3445,192 @@ async function init() {
     });
   }
 
+  // Download PNG functionality
+  const downloadPngBtn = document.getElementById("downloadPngBtn");
+  if (downloadPngBtn) {
+    downloadPngBtn.addEventListener("click", () => {
+      // Create a temporary canvas for export
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = state.canvas.width;
+      tempCanvas.height = state.canvas.height;
+      const tempCtx = tempCanvas.getContext("2d");
+
+      // Copy current canvas content onto transparent background
+      tempCtx.drawImage(state.canvas, 0, 0);
+
+      // Replace dark background and light text colors
+      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+
+        // Calculate brightness/luminance
+        const brightness = (r + g + b) / 3;
+        
+        // Replace dark background (navy/black) with white
+        if (brightness < 50 && a > 200) {
+          // Dark background -> white
+          data[i] = 255;
+          data[i + 1] = 255;
+          data[i + 2] = 255;
+        }
+        // Replace light text colors with dark gray for readability
+        else if (a > 100 && brightness > 150) {
+          // Check if it's relatively neutral (not very saturated color like yellow/blue)
+          const maxRGB = Math.max(r, g, b);
+          const minRGB = Math.min(r, g, b);
+          const saturation = maxRGB > 0 ? (maxRGB - minRGB) / maxRGB : 0;
+          
+          // If it's fairly desaturated (neutral gray-like) or it's very light
+          if (saturation < 0.3 || brightness > 200) {
+            // Replace with darker color for better readability
+            data[i] = 20;
+            data[i + 1] = 20;
+            data[i + 2] = 20;
+          }
+        }
+      }
+
+      tempCtx.putImageData(imageData, 0, 0);
+
+      // Apply text enhancement: add subtle white outline around dark text for legibility
+      const enhancedData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const eData = enhancedData.data;
+      const width = tempCanvas.width;
+      const height = tempCanvas.height;
+      
+      // Create a copy to check original pixels
+      const originalData = new Uint8ClampedArray(eData);
+
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = (y * width + x) * 4;
+          const r = originalData[idx];
+          const g = originalData[idx + 1];
+          const b = originalData[idx + 2];
+          const a = originalData[idx + 3];
+          
+          // Detect dark text pixels (r,g,b close to 20,20,20)
+          if (a > 150 && r < 50 && g < 50 && b < 50 && Math.abs(r - g) < 10 && Math.abs(g - b) < 10) {
+            // Add subtle light outline in adjacent pixels to create contrast
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                if (dx === 0 && dy === 0) continue;
+                const nIdx = ((y + dy) * width + (x + dx)) * 4;
+                const nr = originalData[nIdx];
+                const ng = originalData[nIdx + 1];
+                const nb = originalData[nIdx + 2];
+                const na = originalData[nIdx + 3];
+                
+                // If neighbor is white/light (background), add subtle gray outline
+                if (nr > 200 && ng > 200 && nb > 200 && na > 150) {
+                  eData[nIdx] = Math.max(0, nr - 40);
+                  eData[nIdx + 1] = Math.max(0, ng - 40);
+                  eData[nIdx + 2] = Math.max(0, nb - 40);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      tempCtx.putImageData(enhancedData, 0, 0);
+
+      // Convert to PNG and download
+      tempCanvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "author-network-visualization.png";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    });
+  }
+
   if (sharedEdgesToggle) {
     sharedEdgesToggle.addEventListener("change", (event) => {
       state.onlySharedSelectionLinks = event.target.checked;
       updateSelectionNeighborhood(state);
       updateFilterStatus();
       draw();
+    });
+  }
+
+  // Helper function to export SVG chart as PNG with transparent background and darkened text
+  function exportChartToPNG(containerId, filename) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const svgElement = container.querySelector("svg");
+    if (!svgElement) return;
+
+    const width = parseInt(svgElement.getAttribute("width")) || 600;
+    const height = parseInt(svgElement.getAttribute("height")) || 600;
+
+    // Clone the SVG to avoid modifying the original
+    const svgClone = svgElement.cloneNode(true);
+
+    // Force all text elements to black for maximum contrast
+    const textElements = svgClone.querySelectorAll("text, tspan");
+    textElements.forEach((textEl) => {
+      // Override any existing fill with inline style for maximum specificity
+      textEl.setAttribute("fill", "#000000");
+      textEl.style.fill = "#000000";
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d", { alpha: true });
+
+    // Transparent background
+    ctx.clearRect(0, 0, width, height);
+
+    // Serialize and render the modified SVG
+    const svgString = new XMLSerializer().serializeToString(svgClone);
+    const svg = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svg);
+
+    const img = new Image();
+    img.onload = function () {
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+
+      // Download as PNG
+      canvas.toBlob((blob) => {
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      }, "image/png");
+    };
+    img.src = url;
+  }
+
+  // Event listeners for chord diagram download
+  const downloadChordPngBtn = document.getElementById("downloadChordPngBtn");
+  if (downloadChordPngBtn) {
+    downloadChordPngBtn.addEventListener("click", () => {
+      exportChartToPNG("chordDiagramLarge", "shared-authors-by-language.png");
+    });
+  }
+
+  // Event listeners for radial chart download
+  const downloadRadialPngBtn = document.getElementById("downloadRadialPngBtn");
+  if (downloadRadialPngBtn) {
+    downloadRadialPngBtn.addEventListener("click", () => {
+      exportChartToPNG("radialChartZoomed", "target-languages-radial.png");
     });
   }
 }
