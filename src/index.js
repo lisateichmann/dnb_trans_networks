@@ -361,9 +361,9 @@ function getNodeOpacity(node, state) {
 function projectToRings(nodes, rings, communityKey) {
   // Assign nodes to rings based on their languageCommunity key (override ring placement)
   const ringBuckets = {
-    core: new Map(), // languageCommunity '0'
-    periphery: new Map(), // languageCommunity '1' and '2'
-    outer: new Map(), // all bridges/others
+    core: new Map(), // languageCommunity '1'
+    periphery: new Map(), // languageCommunity '2'
+    outer: new Map(), // languageCommunity '0' and bridges
   };
 
   const ringScores = {
@@ -418,9 +418,8 @@ function projectToRings(nodes, rings, communityKey) {
       node._centralizationTier = 'core';
     } else if (comm === "2") {
       node._centralizationTier = 'periphery';
-    } else if (comm === "0") {
-      node._centralizationTier = 'outer';
     } else {
+      // All others (including bridges and community 0) go to outer
       node._centralizationTier = 'outer';
     }
 
@@ -538,6 +537,8 @@ function createLanguageRatioEntry(language, ratio) {
 
 async function computeLanguageRatioEntries(rawData) {
   const availableLanguageKeys = collectAvailableLanguageKeys(rawData);
+  // Always keep bilingual/multilingual ids even if not present in author nodes
+  ["ger", "mul"].forEach((id) => availableLanguageKeys.add(id));
   const normalizeEntries = (entries) => {
     if (!Array.isArray(entries) || !entries.length) return [];
     let filtered = entries;
@@ -807,7 +808,19 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
     if (commKey === null) return; // skip nodes without languageCommunity
 
     ensureNodeLanguageSet(node);
-    const commId = String(commKey);
+    let commId = String(commKey);
+
+    // Group bridge communities using "->" notation only
+    const isThreeBridge = commId === "0->1->2";
+    const isBridge = commId.includes("->");
+
+    if (isThreeBridge) {
+      commId = "3-bridges";
+    } else if (isBridge) {
+      // This covers 0->1, 0->2, 1->2
+      commId = "2-bridges";
+    }
+    
     if (!summaries.has(commId)) {
       summaries.set(commId, {
         id: commId,
@@ -850,18 +863,14 @@ function computeCommunityLanguageSummaries(nodes, communityKey) {
         languageSet: new Set(languages.map((d) => d.key)),
       };
     })
-    // Custom sort: 0,1,2, 0→1, 0→2, 1→2, 0→1→2
+    // Custom sort: 0, 1, 2, 2-bridges, 3-bridges
     .sort((a, b) => {
-      const order = ["0", "1", "2", "0→1", "0→2", "1→2", "0→1→2"];
+      const order = ["0", "1", "2", "2-bridges", "3-bridges"];
       const aIdx = order.indexOf(a.id);
       const bIdx = order.indexOf(b.id);
       if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
       if (aIdx !== -1) return -1;
       if (bIdx !== -1) return 1;
-      // fallback: single first, then bridges, then lexically
-      const aParts = a.id.split('→').length;
-      const bParts = b.id.split('→').length;
-      if (aParts !== bParts) return aParts - bParts;
       return a.id.localeCompare(b.id, undefined, { numeric: true });
     });
 }
@@ -918,11 +927,21 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
       else tier = 'outer';
     }
     const swatchColor = TIER_NODE_COLORS[tier] || '#d1d5db';
+    
+    let displayName;
+    if (d.id === '2-bridges') {
+      displayName = 'Two-community bridges';
+    } else if (d.id === '3-bridges') {
+      displayName = 'Three-community bridge';
+    } else {
+      displayName = `Community ${d.id}`;
+    }
+    
     header
       .append("strong")
       .html(
         `<span class="cluster-filter-swatch" style="background:${swatchColor}"></span>` +
-        (d.id.includes('→') ? `Bridge ${d.id}` : `Community ${d.id}`)
+        displayName
       );
     header.append("span").text(`${d.authorCount} authors`);
 
@@ -1086,7 +1105,21 @@ function updateClusterVisibility(state) {
 
   const nodeClusterKey = (node) => {
     // Always use node.languageCommunity (preserve order for arrays). Do NOT fallback to numeric communities.
-    return getLanguageCommunityKey(node);
+    const key = getLanguageCommunityKey(node);
+    if (key === null) return null;
+
+    // Map to grouped bridge IDs using "->" notation only
+    const keyStr = String(key);
+    const isThreeBridge = keyStr === "0->1->2";
+    const isBridge = keyStr.includes("->");
+
+    if (isThreeBridge) {
+      return "3-bridges";
+    }
+    if (isBridge) {
+      return "2-bridges";
+    }
+    return keyStr;
   };
 
   state.nodes.forEach((node) => {
@@ -1176,22 +1209,28 @@ function createChordDiagram(languageData, options = {}) {
   const outerRadius = Math.min(width, height) * 0.45;
   const innerRadius = outerRadius - 20;
 
-  // Filter to top languages by weight
+  // Filter to top languages by weight, but always include bilingual/multilingual ids
+  const preferredLanguageIds = new Set(["ger", "mul"]);
   const languageWeights = new Map();
   languageData.nodes.forEach(node => {
     languageWeights.set(node.id, node.totalWeight || 0);
   });
 
-  const topLanguages = Array.from(languageWeights.entries())
+  const sortedLanguages = Array.from(languageWeights.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 15)
     .map(d => d[0]);
 
-  const topLanguageSet = new Set(topLanguages);
+  const topLanguages = sortedLanguages.slice(0, 15);
+  const preferredLanguages = sortedLanguages.filter(id => preferredLanguageIds.has(id));
+
+  const mergedLanguages = [...topLanguages, ...preferredLanguages]
+    .filter((id, idx, arr) => arr.indexOf(id) === idx);
+
+  const topLanguageSet = new Set(mergedLanguages);
 
   // Build matrix and track connections
-  const languageIndex = new Map(topLanguages.map((lang, i) => [lang, i]));
-  const matrix = Array(topLanguages.length).fill(0).map(() => Array(topLanguages.length).fill(0));
+  const languageIndex = new Map(mergedLanguages.map((lang, i) => [lang, i]));
+  const matrix = Array(mergedLanguages.length).fill(0).map(() => Array(mergedLanguages.length).fill(0));
   const connectionCounts = new Map(); // track how many connections each language has
 
   languageData.links.forEach(link => {
@@ -1207,7 +1246,7 @@ function createChordDiagram(languageData, options = {}) {
   // Optimize ordering to minimize crossings using a simple heuristic
   // Calculate connection strengths and reorder based on weighted connections
   const connectionStrength = new Map();
-  topLanguages.forEach((lang, idx) => {
+  mergedLanguages.forEach((lang, idx) => {
     let totalWeight = 0;
     let weightedSum = 0;
     matrix[idx].forEach((weight, targetIdx) => {
@@ -1227,7 +1266,7 @@ function createChordDiagram(languageData, options = {}) {
   });
 
   // Create optimized ordering
-  const optimizedOrder = topLanguages
+  const optimizedOrder = mergedLanguages
     .map((lang, idx) => ({ lang, idx, strength: connectionStrength.get(idx) || idx }))
     .sort((a, b) => a.strength - b.strength)
     .map(d => d.idx);
@@ -1236,7 +1275,7 @@ function createChordDiagram(languageData, options = {}) {
   const reorderedMatrix = optimizedOrder.map(i =>
     optimizedOrder.map(j => matrix[i][j])
   );
-  const reorderedLanguages = optimizedOrder.map(i => topLanguages[i]);
+  const reorderedLanguages = optimizedOrder.map(i => mergedLanguages[i]);
 
   const svg = container.append("svg")
     .attr("width", width)
@@ -1458,11 +1497,19 @@ function createRadialChart(languageData, options = {}) {
   const innerRadius = outerRadius * 0.6; // Donut thickness
   const centerRadius = 30; // German center circle
 
-  // Filter and sort languages by translation count (excluding German)
-  const languages = languageData.nodes
-    .filter(node => node.id !== "ger" && node.id !== "deu" && node.totalWeight > 0)
-    .sort((a, b) => b.totalWeight - a.totalWeight)
-    .slice(0, 30);
+  // Filter and sort languages by translation count
+  // Keep bilingual (ger) and multilingual (mul) even if they fall outside the top 30
+  const preferredLanguageIds = new Set(["ger", "mul"]);
+  const filteredLanguages = languageData.nodes
+    .filter(node => node.id !== "deu" && node.totalWeight > 0)
+    .sort((a, b) => b.totalWeight - a.totalWeight);
+
+  const topLanguages = filteredLanguages.slice(0, 30);
+  const preferredLanguages = filteredLanguages.filter(node => preferredLanguageIds.has(node.id));
+
+  const languages = [...topLanguages, ...preferredLanguages]
+    .filter((node, idx, arr) => arr.findIndex(n => n.id === node.id) === idx)
+    .sort((a, b) => b.totalWeight - a.totalWeight);
 
   // Use global color scale for consistency with chord diagram
   const allLanguageIds = languageData.nodes.map(n => n.id);
