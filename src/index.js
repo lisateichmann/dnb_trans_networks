@@ -2920,6 +2920,14 @@ async function init() {
     draw();
   }
 
+  // Helper function to update hover neighbors
+  function updateHoverNeighbors() {
+    // Use adjacency map for fast lookup of outgoing neighbors
+    state.hoverNeighbors = (state.hoverNode && state.adjacencyMap)
+      ? state.adjacencyMap.get(state.hoverNode.id) || new Set()
+      : null;
+  }
+
   function draw() {
     const { ctx, width, height } = state;
     const selectionActive = state.selectedIds && state.selectedIds.size > 0;
@@ -3011,32 +3019,6 @@ async function init() {
           highlightedLinks.push(link);
         }
       });
-      // Track hover neighbors for fast lookup
-      function updateHoverNeighbors() {
-        // Use adjacency map for fast lookup of outgoing neighbors
-        state.hoverNeighbors = (state.hoverNode && state.adjacencyMap)
-          ? state.adjacencyMap.get(state.hoverNode.id) || new Set()
-          : null;
-      }
-
-      // Patch mousemove to update hover neighbors
-      d3.select(canvas)
-        .on("mousemove", (event) => {
-          if (!state.quadtree) return;
-          const [x, y] = screenToWorld(event);
-          const found = state.quadtree.find(x, y, 18 / (state.transform.k || 1));
-          if (found && isNodeVisible(state, found)) {
-            state.hoverNode = found;
-            updateHoverNeighbors();
-            // ...existing code...
-            // (rest of mousemove handler unchanged)
-          } else {
-            state.hoverNode = null;
-            updateHoverNeighbors();
-            hideTooltip(state.tooltip);
-          }
-          draw();
-        })
 
       if (highlightedLinks.length) {
         highlightedLinks.forEach((link) => {
@@ -3197,6 +3179,7 @@ async function init() {
       const found = state.quadtree.find(x, y, 18 / (state.transform.k || 1));
       if (found && isNodeVisible(state, found)) {
         state.hoverNode = found;
+        updateHoverNeighbors();
         // Tooltip: show languageCommunity as community, and tier label
         const communityValue = found.languageCommunity != null ? String(found.languageCommunity) : "n/a";
         let tierLabel = "";
@@ -3221,12 +3204,14 @@ async function init() {
         );
       } else {
         state.hoverNode = null;
+        updateHoverNeighbors();
         hideTooltip(state.tooltip);
       }
       draw();
     })
     .on("mouseleave", () => {
       state.hoverNode = null;
+      updateHoverNeighbors();
       hideTooltip(state.tooltip);
       draw();
     })
