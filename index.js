@@ -1,5 +1,6 @@
 import './styles.css';
 import { createTooltip, showTooltip, hideTooltip, formatNumber } from "./utils.js";
+import pako from 'pako';
 
 const DATA_URL = 'data/author_author_graph.json';
 const LANGUAGE_CSV_URL = 'data.csv';
@@ -283,6 +284,22 @@ function formatCentralityLabel(metric) {
 }
 
 async function loadData() {
+  // Try fetching the compressed gzip artifact first (smaller download). If available, fetch and decompress client-side.
+  const gzUrl = DATA_URL + '.gz';
+  try {
+    const gzRes = await fetch(gzUrl);
+    if (gzRes.ok) {
+      const buffer = await gzRes.arrayBuffer();
+      const uint8 = new Uint8Array(buffer);
+      const text = pako.ungzip(uint8, { to: 'string' });
+      return JSON.parse(text);
+    }
+  } catch (err) {
+    // If anything goes wrong (network/CORS/decompression), fall back to fetching plain JSON below
+    console.warn('Failed to fetch/decompress gz file, falling back to JSON:', err);
+  }
+
+  // Fallback to normal JSON fetch (served by same origin when available)
   const res = await fetch(DATA_URL);
   if (!res.ok) throw new Error(`Failed to load ${DATA_URL}`);
   return res.json();
