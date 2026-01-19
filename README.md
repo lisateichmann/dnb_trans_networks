@@ -2,7 +2,7 @@
 
 A network analysis and interactive visualization project exploring the transfer routes and canons of German fiction in translation (translated fiction originally published in German) using bibliographic data from the German National Library (Deutsche Nationalbibliothek, DNB).
 
-# Web application
+## Web application
 
 The interactive web application with visualizations can be accessed here: https://lisateichmann.github.io/dnb_trans_networks/
 
