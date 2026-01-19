@@ -8,6 +8,7 @@ module.exports = {
   output: {
     filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist'),
+    publicPath: '', // Ensures relative asset paths for GitHub Pages
     clean: true,
   },
   devServer: {
