@@ -2701,13 +2701,12 @@ async function init() {
           <strong>${Number.isFinite(centralityScore) ? centralityScore.toFixed(3) : "n/a"}</strong>
         </div>
         <div class="author-detail-metric">
-          <span>Centralization</span>
-          <strong>${Number.isFinite(normalizedCentralization)
-        ? normalizedCentralization.toFixed(3)
-        : Number.isFinite(rawCentralization)
-          ? rawCentralization.toFixed(3)
-          : "n/a"
-      }</strong>
+          <span>Centralization (normalized)</span>
+          <strong>${Number.isFinite(normalizedCentralization) ? normalizedCentralization.toFixed(3) : "n/a"}</strong>
+        </div>
+        <div class="author-detail-metric">
+          <span>Centralization (raw)</span>
+          <strong>${Number.isFinite(rawCentralization) ? rawCentralization.toFixed(3) : "n/a"}</strong>
         </div>
       </div>
       <div class="author-detail-section">
@@ -2882,6 +2881,10 @@ async function init() {
       const norm = Number(n.centralizationScoreNormalized);
       return sum + (Number.isFinite(norm) ? norm : 0);
     }, 0) / nodes.length;
+    const avgRawCentralization = nodes.reduce((sum, n) => {
+      const raw = Number(n.centralizationScore);
+      return sum + (Number.isFinite(raw) ? raw : 0);
+    }, 0) / nodes.length;
 
     authorDetailPanel.innerHTML = `
       <div class="author-detail-header">
@@ -2901,8 +2904,12 @@ async function init() {
           <strong>${sharedConnections.size}</strong>
         </div>
         <div class="author-detail-metric">
-          <span>Avg. centralization</span>
+          <span>Avg. centralization (norm)</span>
           <strong>${Number.isFinite(avgCentralization) ? avgCentralization.toFixed(3) : "n/a"}</strong>
+        </div>
+        <div class="author-detail-metric">
+          <span>Avg. centralization (raw)</span>
+          <strong>${Number.isFinite(avgRawCentralization) ? avgRawCentralization.toFixed(3) : "n/a"}</strong>
         </div>
       </div>
       <div class="author-detail-section">
@@ -3328,7 +3335,9 @@ async function init() {
           `<div style="margin:4px 0 2px 0;"><b>Total translations:</b> <span style='color:#fbbf24'>${formatNumber(found.totalWeight)}</span></div>` +
           `<div style="margin:2px 0 2px 0;"><b>Languages:</b> ${languages || "<span style='color:#94a3b8'>n/a</span>"}</div>` +
           `<div style="margin:2px 0 2px 0;"><b>Community:</b> <span style='color:#38bdf8;font-weight:600;'>${communityValue}</span></div>` +
-          `<div style="margin:2px 0 0 0;"><b>Tier:</b> <span style='color:${tierColor};font-weight:600;'>${tierLabel}</span></div>`,
+          `<div style="margin:2px 0 0 0;"><b>Tier:</b> <span style='color:${tierColor};font-weight:600;'>${tierLabel}</span></div>` +
+          `<div style="margin:4px 0 0 0;"><b>Centralization (norm):</b> <span style='color:#fbbf24;font-weight:600;'>${Number.isFinite(found.centralizationScoreNormalized) ? found.centralizationScoreNormalized.toFixed(3) : "n/a"}</span></div>` +
+          `<div style="margin:2px 0 0 0;"><b>Centralization (raw):</b> <span style='color:#60a5fa;font-weight:600;'>${Number.isFinite(found.centralizationScore) ? found.centralizationScore.toFixed(3) : "n/a"}</span></div>`,
           event
         );
       } else {
