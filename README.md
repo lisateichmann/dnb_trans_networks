@@ -2,10 +2,13 @@
 
 A network analysis and interactive visualization project exploring the transfer routes and canons of German fiction in translation (translated fiction originally published in German) using bibliographic data from the German National Library (Deutsche Nationalbibliothek, DNB).
 
+# DNB Translation Networks
+
+The interactive web application with visualizations can be accessed here: https://lisateichmann.github.io/dnb_trans_networks/
+
 ## Data source
 
-The dataset was derived from sources in the public domain: Österreichische Nationalbibliothek. “Katalog.” Accessed January 28, 2021. https://labs.onb.ac.at/de/dataset/catalogue/.
-The full bibliographic notes are available with a data quality assesment here: https://doi.org/10.7910/DVN/LJFLL
+The dataset was derived from the German National Library and published here: https://doi.org/10.7910/DVN/LJFLL9
 If you re-use any of the data please cite: Teichmann, Lisa (2025) ‘The “Mapping German Fiction in Translation” Dataset: Data Collection, Scope, and Data Quality’, Journal of Cultural Analytics, 10/1, https://doi.org/10.22148/001c.128010.
 
 
