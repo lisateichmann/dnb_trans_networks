@@ -977,11 +977,23 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     .attr("type", "button")
     .attr("class", "cluster-filter-card")
     .style("background", d => {
-      // Color by centrality tier for visual consistency
-      // Use the tier of the cluster (d.tier or d.centralizationTier or similar)
+      // Prefer community color from provided colorScale (matches circle view); fall back to tier color
+      let communityColor = null;
+      try {
+        if (colorScale && typeof colorScale === 'function') {
+          communityColor = colorScale(d.id);
+        }
+      } catch (err) {
+        communityColor = null;
+      }
+      if (communityColor) {
+        const c = d3.color(communityColor);
+        if (c) return `rgba(${Math.round(c.r)},${Math.round(c.g)},${Math.round(c.b)},0.12)`;
+        return communityColor;
+      }
+      // Fallback: Color by centrality tier for visual consistency
       let tier = d.tier || d.centralizationTier;
       if (!tier && typeof d.id === 'string') {
-        // Guess tier from id if possible (e.g., '0' = core, '1'/'2' = periphery)
         if (d.id === '0') tier = 'core';
         else if (d.id === '1' || d.id === '2') tier = 'periphery';
         else tier = 'outer';
@@ -1001,14 +1013,24 @@ function renderClusterLanguageFilter(container, summaries, colorScale, onSelecti
     const card = d3.select(this);
     card.selectAll("*").remove();
     const header = card.append("div").attr("class", "cluster-filter-row");
-    // Determine tier color for swatch
+    // Determine tier (used as fallback) and pick swatch color from community color scale if available
     let tier = d.tier || d.centralizationTier;
     if (!tier && typeof d.id === 'string') {
       if (d.id === '0') tier = 'core';
       else if (d.id === '1' || d.id === '2') tier = 'periphery';
       else tier = 'outer';
     }
-    const swatchColor = TIER_NODE_COLORS[tier] || '#d1d5db';
+    let swatchColor = null;
+    if (colorScale && typeof colorScale === 'function') {
+      try {
+        swatchColor = colorScale(d.id);
+      } catch (err) {
+        swatchColor = null;
+      }
+    }
+    if (!swatchColor) {
+      swatchColor = TIER_NODE_COLORS[tier] || '#d1d5db';
+    }
     
     let displayName;
     if (d.id === '2-bridges') {
@@ -1899,6 +1921,7 @@ async function init() {
   const state = {
     canvas,
     ctx,
+    pixelRatio: pixelRatio,
     width: chartWidth,
     height: chartHeight,
     tooltip,
@@ -3071,7 +3094,8 @@ async function init() {
     const detailHighlight = state.detailHoverConnection;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, width, height);
+    // Clear using the backing canvas pixel dimensions (handles devicePixelRatio correctly)
+    ctx.clearRect(0, 0, state.canvas.width, state.canvas.height);
     ctx.restore();
 
     ctx.save();
