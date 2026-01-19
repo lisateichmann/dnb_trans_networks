@@ -8,7 +8,7 @@ module.exports = {
   output: {
     filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist'),
-    publicPath: '', // Ensures relative asset paths for GitHub Pages
+    publicPath: '/dnb_trans_networks/', // Set for GitHub Pages deployment
     clean: true,
   },
   devServer: {
@@ -33,6 +33,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: 'index.html',
       scriptLoading: 'defer',
+      base: '/dnb_trans_networks/',
     }),
     new CopyWebpackPlugin({
       patterns: [
