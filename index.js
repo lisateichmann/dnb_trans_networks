@@ -1,9 +1,9 @@
 import './styles.css';
 import { createTooltip, showTooltip, hideTooltip, formatNumber } from "./utils.js";
 
-const DATA_URL = new URL("./data/author_author_graph.json", import.meta.url).href;
-const LANGUAGE_CSV_URL = new URL("./data.csv", import.meta.url).href;
-const LANGUAGE_LANGUAGE_URL = new URL("./data/language_language_graph.json", import.meta.url).href;
+const DATA_URL = 'data/author_author_graph.json';
+const LANGUAGE_CSV_URL = 'data.csv';
+const LANGUAGE_LANGUAGE_URL = 'data/language_language_graph.json';
 
 const COMMUNITY_COLORS = [
   "#f87171", // vivid red
