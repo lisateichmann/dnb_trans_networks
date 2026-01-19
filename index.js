@@ -284,25 +284,68 @@ function formatCentralityLabel(metric) {
 }
 
 async function loadData() {
-  // Try fetching the compressed gzip artifact first (smaller download). If available, fetch and decompress client-side.
-  const gzUrl = DATA_URL + '.gz';
+  return loadJSONWithGzFallback(DATA_URL);
+}
+
+// Generic helper: try fetching <url>.gz and decompress client-side; fallback to JSON fetch
+async function loadJSONWithGzFallback(url) {
+  const gzUrl = url + '.gz';
+
+  // Try fetching the gz directly first (preferred)
   try {
     const gzRes = await fetch(gzUrl);
-    if (gzRes.ok) {
+    if (gzRes && gzRes.ok) {
+      const ct = gzRes.headers.get('content-type') || '';
+      console.debug(`Fetched gz for ${gzUrl} (content-type: ${ct})`);
       const buffer = await gzRes.arrayBuffer();
-      const uint8 = new Uint8Array(buffer);
-      const text = pako.ungzip(uint8, { to: 'string' });
-      return JSON.parse(text);
+      try {
+        const uint8 = new Uint8Array(buffer);
+        const text = pako.ungzip(uint8, { to: 'string' });
+        return JSON.parse(text);
+      } catch (ungzipErr) {
+        console.warn(`Failed to decompress ${gzUrl}:`, ungzipErr);
+        // Fall through to try normal JSON
+      }
     }
   } catch (err) {
-    // If anything goes wrong (network/CORS/decompression), fall back to fetching plain JSON below
-    console.warn('Failed to fetch/decompress gz file, falling back to JSON:', err);
+    console.warn(`Gzip fetch failed for ${gzUrl}, will try plain JSON:`, err);
   }
 
-  // Fallback to normal JSON fetch (served by same origin when available)
-  const res = await fetch(DATA_URL);
-  if (!res.ok) throw new Error(`Failed to load ${DATA_URL}`);
-  return res.json();
+  // Fetch plain JSON (may be a Git LFS pointer on gh-pages). If we get a pointer, try the gz again.
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load ${url}`);
+
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('application/json') || contentType.includes('application/vnd.api+json') || contentType.includes('application/ld+json')) {
+    return res.json();
+  }
+
+  // Some deployments (Git LFS/pointers) will return a pointer text rather than JSON. Inspect the body.
+  const text = await res.text();
+  // Git LFS pointer format begins with 'version https://git-lfs.github.com/spec/v1'
+  if (text && text.startsWith('version https://git-lfs.github.com/spec/v1')) {
+    console.warn(`${url} appears to be a Git LFS pointer; attempting to load ${gzUrl} instead`);
+    try {
+      const gzRes2 = await fetch(gzUrl);
+      if (gzRes2 && gzRes2.ok) {
+        const buffer = await gzRes2.arrayBuffer();
+        const uint8 = new Uint8Array(buffer);
+        const text2 = pako.ungzip(uint8, { to: 'string' });
+        return JSON.parse(text2);
+      }
+    } catch (err) {
+      console.warn(`Retry fetching/decompressing ${gzUrl} failed:`, err);
+      throw new Error(`Failed to load JSON (LFS pointer returned) and gz fallback failed for ${url}`);
+    }
+  }
+
+  // If content isn't JSON and not a pointer, try to parse anyway to raise a helpful error
+  try {
+    return JSON.parse(text);
+  } catch (parseErr) {
+    console.error(`Failed to parse ${url} — content-type: ${contentType}, first chars: ${text.slice(0,80)}`);
+    throw parseErr;
+  }
 }
 
 function buildRings(width, height) {
@@ -514,31 +557,53 @@ function clampToRing(node, rings, overflow = node._overflowMargin || 0) {
 async function loadLanguageRatiosFromCSV() {
   if (languageRatioCache) return languageRatioCache;
   if (languageRatioPromise) return languageRatioPromise;
-  languageRatioPromise = d3
-    .csv(LANGUAGE_CSV_URL)
-    .then((rows) => {
-      const counts = new Map();
-      rows.forEach((row) => {
-        const lang = (row.language || "").trim();
-        if (!lang) return;
-        counts.set(lang, (counts.get(lang) || 0) + 1);
-      });
-      const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
-      if (!total) {
-        languageRatioCache = [];
-        return languageRatioCache;
+
+  languageRatioPromise = (async () => {
+    // Try fetching compressed CSV first
+    const gzUrl = LANGUAGE_CSV_URL + '.gz';
+    let csvText = null;
+    try {
+      const gzRes = await fetch(gzUrl);
+      if (gzRes && gzRes.ok) {
+        const buffer = await gzRes.arrayBuffer();
+        const uint8 = new Uint8Array(buffer);
+        csvText = pako.ungzip(uint8, { to: 'string' });
       }
-      languageRatioCache = Array.from(counts.entries()).map(([language, count]) => ({
-        language,
-        ratio: count / total,
-      }));
-      return languageRatioCache;
-    })
-    .catch((error) => {
-      console.error("Unable to compute language ratios from CSV", error);
+    } catch (err) {
+      console.warn('Failed to fetch/decompress CSV gz, falling back to plain CSV fetch:', err);
+    }
+
+    if (!csvText) {
+      const res = await fetch(LANGUAGE_CSV_URL);
+      if (!res.ok) throw new Error(`Failed to load ${LANGUAGE_CSV_URL}`);
+      csvText = await res.text();
+    }
+
+    const rows = d3.csvParse(csvText);
+    const counts = new Map();
+    rows.forEach((row) => {
+      const lang = (row.language || '').trim();
+      if (!lang) return;
+      counts.set(lang, (counts.get(lang) || 0) + 1);
+    });
+    const total = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
+    if (!total) {
       languageRatioCache = [];
       return languageRatioCache;
-    });
+    }
+    languageRatioCache = Array.from(counts.entries()).map(([language, count]) => ({
+      language,
+      ratio: count / total,
+    }));
+    return languageRatioCache;
+  })().catch((error) => {
+    console.error('Unable to compute language ratios from CSV', error);
+    languageRatioCache = [];
+    return languageRatioCache;
+  }).finally(() => {
+    if (!languageRatioCache) languageRatioPromise = null;
+  });
+
   return languageRatioPromise;
 }
 
@@ -2320,7 +2385,7 @@ async function init() {
   // Load and render chord diagram with click handler
   let languageLanguageData = null;
   try {
-    languageLanguageData = await d3.json(LANGUAGE_LANGUAGE_URL);
+    languageLanguageData = await loadJSONWithGzFallback(LANGUAGE_LANGUAGE_URL);
     createChordDiagram(languageLanguageData, {
       onLanguageClick: (langKey, event) => {
         // Trigger language filter toggle
