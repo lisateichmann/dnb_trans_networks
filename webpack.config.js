@@ -36,7 +36,8 @@ module.exports = {
     }),
     new CopyWebpackPlugin({
       patterns: [
-        { from: 'data', to: 'data' }
+        { from: 'data', to: 'data' },
+        { from: 'data.csv', to: 'data.csv' }
       ],
     }),
   ],
