@@ -301,7 +301,9 @@ async function loadJSONWithGzFallback(url) {
       try {
         const uint8 = new Uint8Array(buffer);
         const text = pako.ungzip(uint8, { to: 'string' });
-        return JSON.parse(text);
+        // strip BOM if present and parse
+        const cleaned = String(text).replace(/^\uFEFF/, '');
+        return JSON.parse(cleaned);
       } catch (ungzipErr) {
         console.warn(`Failed to decompress ${gzUrl}:`, ungzipErr);
         // Fall through to try normal JSON
@@ -316,12 +318,9 @@ async function loadJSONWithGzFallback(url) {
   if (!res.ok) throw new Error(`Failed to load ${url}`);
 
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
-  if (contentType.includes('application/json') || contentType.includes('application/vnd.api+json') || contentType.includes('application/ld+json')) {
-    return res.json();
-  }
-
-  // Some deployments (Git LFS/pointers) will return a pointer text rather than JSON. Inspect the body.
+  // Read body as text so we can detect Git LFS pointers even when Content-Type is JSON
   const text = await res.text();
+  // Some deployments (Git LFS/pointers) will return a pointer text rather than JSON. Inspect the body.
   // Git LFS pointer format begins with 'version https://git-lfs.github.com/spec/v1'
   if (text && text.startsWith('version https://git-lfs.github.com/spec/v1')) {
     console.warn(`${url} appears to be a Git LFS pointer; attempting to load ${gzUrl} instead`);
@@ -331,17 +330,33 @@ async function loadJSONWithGzFallback(url) {
         const buffer = await gzRes2.arrayBuffer();
         const uint8 = new Uint8Array(buffer);
         const text2 = pako.ungzip(uint8, { to: 'string' });
-        return JSON.parse(text2);
+        const cleaned2 = String(text2).replace(/^\uFEFF/, '');
+        return JSON.parse(cleaned2);
       }
     } catch (err) {
       console.warn(`Retry fetching/decompressing ${gzUrl} failed:`, err);
-      throw new Error(`Failed to load JSON (LFS pointer returned) and gz fallback failed for ${url}`);
+      console.warn('Gz fallback failed for LFS pointer.');
+      // If running on localhost, try a small dev fallback file to allow local development
+      try {
+        if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+          const devUrl = url.replace(/\.json$/i, '.dev.json');
+          console.warn(`Attempting to load development fallback ${devUrl}`);
+          const devRes = await fetch(devUrl);
+          if (devRes && devRes.ok) {
+            return devRes.json();
+          }
+        }
+      } catch (devErr) {
+        console.warn('Dev fallback failed:', devErr);
+      }
+      throw new Error(`Failed to load JSON (LFS pointer returned) and gz/dev fallback failed for ${url}`);
     }
   }
 
   // If content isn't JSON and not a pointer, try to parse anyway to raise a helpful error
   try {
-    return JSON.parse(text);
+    const cleaned = String(text).replace(/^\uFEFF/, '');
+    return JSON.parse(cleaned);
   } catch (parseErr) {
     console.error(`Failed to parse ${url} — content-type: ${contentType}, first chars: ${text.slice(0,80)}`);
     throw parseErr;
@@ -1799,6 +1814,30 @@ async function init() {
 
   const rawData = await loadData();
 
+  // Load female authors lookup table from CSV (one author per line, first column)
+  let femaleAuthorsSet = null;
+  try {
+    const csvText = await fetch('author_femaleonly.csv').then((r) => r.text());
+    const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    femaleAuthorsSet = new Set();
+    for (const line of lines) {
+      // Use the whole line as the author identifier (CSV likely contains names like "Last, First").
+      let candidate = String(line).replace(/^"|"$/g, "").trim();
+      if (!candidate) continue;
+      const lower = candidate.toLowerCase();
+      if (lower === 'author' || lower === 'name' || lower === 'id') continue;
+      // Normalize variant without space after comma (e.g., "Last, First" -> "Last,First")
+      const noSpace = candidate.replace(/,\s+/g, ',').trim();
+      femaleAuthorsSet.add(candidate);
+      femaleAuthorsSet.add(noSpace);
+      femaleAuthorsSet.add(candidate.toLowerCase());
+      femaleAuthorsSet.add(noSpace.toLowerCase());
+    }
+  } catch (e) {
+    console.warn('Could not load female authors lookup:', e);
+    femaleAuthorsSet = null;
+  }
+
   // Compute and log network metadata
   const networkMetadata = computeNetworkMetadata(rawData);
   if (typeof renderNetworkMetadata === "function") {
@@ -1960,6 +1999,8 @@ async function init() {
     legendTierRegions: [],
     adjacencyMap,
     top20Filter: false,
+    femaleFilter: false,
+    femaleAuthorsSet: femaleAuthorsSet,
   };
 
   const allWeights = links
@@ -2347,6 +2388,7 @@ async function init() {
     if (state.useTranslationOpacity) toggles.push("Translation opacity");
     if (state.onlySharedSelectionLinks) toggles.push("Shared links only");
     if (state.top20Filter) toggles.push("Top 20 authors");
+    if (state.femaleFilter) toggles.push("Female authors");
 
     toggles.forEach(label => {
       const badge = filterStatusItems.append("div")
@@ -2368,7 +2410,8 @@ async function init() {
       || !state.showEdges
       || state.useTranslationOpacity
       || state.onlySharedSelectionLinks
-      || state.top20Filter;
+      || state.top20Filter
+      || state.femaleFilter;
 
     statusBar.style("display", hasFilters ? "flex" : "none");
   };
@@ -2384,6 +2427,7 @@ async function init() {
     state.focusNodeId = null;
     state.focusVisible = null;
     state.top20Filter = false;
+    state.femaleFilter = false;
 
     // Reset UI controls
     if (state.clusterFilterController) {
@@ -2393,6 +2437,11 @@ async function init() {
     if (top20AuthorsBtn) {
       top20AuthorsBtn.textContent = "Show Top 20 Authors";
       top20AuthorsBtn.classList.remove("active");
+    }
+    const femaleAuthorsBtn = document.getElementById("femaleAuthorsBtn");
+    if (femaleAuthorsBtn) {
+      femaleAuthorsBtn.textContent = "Show Female Authors";
+      femaleAuthorsBtn.classList.remove("active");
     }
     updateLanguageRatioFilterDisplay();
     filterByWeightState(state, state.weightRange);
@@ -3289,6 +3338,13 @@ async function init() {
       if (!TOP_20_AUTHORS.includes(authorName)) return false;
     }
 
+    // Check female authors filter (lookup from CSV)
+    if (state.femaleFilter) {
+      const authorName = node.id || "";
+      if (!state.femaleAuthorsSet) return false;
+      if (!state.femaleAuthorsSet.has(authorName) && !state.femaleAuthorsSet.has(String(authorName).toLowerCase())) return false;
+    }
+
     // Check tier filter
     if (state.tierFilter && state.tierFilter.size > 0) {
       const tier = node._centralizationTier;
@@ -3590,6 +3646,20 @@ async function init() {
       updateFilterStatus();
       draw();
     });
+  }
+
+  const femaleAuthorsBtn = document.getElementById("femaleAuthorsBtn");
+  if (femaleAuthorsBtn) {
+    femaleAuthorsBtn.addEventListener("click", () => {
+      state.femaleFilter = !state.femaleFilter;
+      femaleAuthorsBtn.textContent = state.femaleFilter ? "Show All Authors" : "Show Female Authors";
+      femaleAuthorsBtn.classList.toggle("active", state.femaleFilter);
+      updateFilterStatus();
+      draw();
+    });
+    // reflect initial loaded state
+    femaleAuthorsBtn.classList.toggle("active", state.femaleFilter);
+    femaleAuthorsBtn.textContent = state.femaleFilter ? "Show All Authors" : "Show Female Authors";
   }
 
   // Download PNG functionality
