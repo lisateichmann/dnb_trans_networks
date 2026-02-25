@@ -298,15 +298,31 @@ async function loadJSONWithGzFallback(url) {
       const ct = gzRes.headers.get('content-type') || '';
       console.debug(`Fetched gz for ${gzUrl} (content-type: ${ct})`);
       const buffer = await gzRes.arrayBuffer();
-      try {
-        const uint8 = new Uint8Array(buffer);
-        const text = pako.ungzip(uint8, { to: 'string' });
-        // strip BOM if present and parse
-        const cleaned = String(text).replace(/^\uFEFF/, '');
-        return JSON.parse(cleaned);
-      } catch (ungzipErr) {
-        console.warn(`Failed to decompress ${gzUrl}:`, ungzipErr);
-        // Fall through to try normal JSON
+      const uint8 = new Uint8Array(buffer);
+
+      // Detect gzip magic header 0x1f 0x8b
+      const isGzip = uint8 && uint8.length >= 2 && uint8[0] === 0x1f && uint8[1] === 0x8b;
+      if (isGzip) {
+        try {
+          const text = pako.ungzip(uint8, { to: 'string' });
+          const cleaned = String(text).replace(/^\uFEFF/, '');
+          return JSON.parse(cleaned);
+        } catch (ungzipErr) {
+          console.warn(`Failed to decompress ${gzUrl}:`, ungzipErr);
+          // Fall through to try normal JSON
+        }
+      } else {
+        // Server may have auto-decompressed the response (Content-Encoding sent),
+        // or the file served is actually plain JSON (not gz). Decode and attempt parse.
+        try {
+          const decoder = new TextDecoder('utf-8');
+          const text = decoder.decode(uint8);
+          const cleaned = String(text).replace(/^\uFEFF/, '');
+          return JSON.parse(cleaned);
+        } catch (textParseErr) {
+          console.warn(`Fetched ${gzUrl} but content is not gzipped JSON:`, textParseErr);
+          // Fall through to try normal JSON
+        }
       }
     }
   } catch (err) {
