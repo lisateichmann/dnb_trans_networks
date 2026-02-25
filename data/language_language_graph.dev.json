@@ -1,0 +1,5 @@
+{
+  "nodes": [{"id":"en","label":"English"},{"id":"de","label":"German"}],
+  "links": [{"source":"de","target":"en","weight":5}],
+  "meta": {}
+}
