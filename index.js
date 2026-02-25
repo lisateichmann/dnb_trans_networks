@@ -292,6 +292,7 @@ async function loadJSONWithGzFallback(url) {
   // Fetch plain JSON first. If the response appears to be a Git LFS pointer,
   // attempt to fetch the precompressed .gz fallback (useful when LFS stores
   // the actual file elsewhere and the .json is a pointer).
+  const gzUrl = url + '.gz';
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to load ${url}`);
 
