@@ -289,55 +289,16 @@ async function loadData() {
 
 // Generic helper: try fetching <url>.gz and decompress client-side; fallback to JSON fetch
 async function loadJSONWithGzFallback(url) {
-  const gzUrl = url + '.gz';
-
-  // Try fetching the gz directly first (preferred)
-  try {
-    const gzRes = await fetch(gzUrl);
-    if (gzRes && gzRes.ok) {
-      const ct = gzRes.headers.get('content-type') || '';
-      console.debug(`Fetched gz for ${gzUrl} (content-type: ${ct})`);
-      const buffer = await gzRes.arrayBuffer();
-      const uint8 = new Uint8Array(buffer);
-
-      // Detect gzip magic header 0x1f 0x8b
-      const isGzip = uint8 && uint8.length >= 2 && uint8[0] === 0x1f && uint8[1] === 0x8b;
-      if (isGzip) {
-        try {
-          const text = pako.ungzip(uint8, { to: 'string' });
-          const cleaned = String(text).replace(/^\uFEFF/, '');
-          return JSON.parse(cleaned);
-        } catch (ungzipErr) {
-          console.warn(`Failed to decompress ${gzUrl}:`, ungzipErr);
-          // Fall through to try normal JSON
-        }
-      } else {
-        // Server may have auto-decompressed the response (Content-Encoding sent),
-        // or the file served is actually plain JSON (not gz). Decode and attempt parse.
-        try {
-          const decoder = new TextDecoder('utf-8');
-          const text = decoder.decode(uint8);
-          const cleaned = String(text).replace(/^\uFEFF/, '');
-          return JSON.parse(cleaned);
-        } catch (textParseErr) {
-          console.warn(`Fetched ${gzUrl} but content is not gzipped JSON:`, textParseErr);
-          // Fall through to try normal JSON
-        }
-      }
-    }
-  } catch (err) {
-    console.warn(`Gzip fetch failed for ${gzUrl}, will try plain JSON:`, err);
-  }
-
-  // Fetch plain JSON (may be a Git LFS pointer on gh-pages). If we get a pointer, try the gz again.
+  // Fetch plain JSON first. If the response appears to be a Git LFS pointer,
+  // attempt to fetch the precompressed .gz fallback (useful when LFS stores
+  // the actual file elsewhere and the .json is a pointer).
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to load ${url}`);
 
   const contentType = (res.headers.get('content-type') || '').toLowerCase();
-  // Read body as text so we can detect Git LFS pointers even when Content-Type is JSON
   const text = await res.text();
-  // Some deployments (Git LFS/pointers) will return a pointer text rather than JSON. Inspect the body.
-  // Git LFS pointer format begins with 'version https://git-lfs.github.com/spec/v1'
+
+  // If the response is a Git LFS pointer, try the gz fallback.
   if (text && text.startsWith('version https://git-lfs.github.com/spec/v1')) {
     console.warn(`${url} appears to be a Git LFS pointer; attempting to load ${gzUrl} instead`);
     try {
@@ -345,9 +306,19 @@ async function loadJSONWithGzFallback(url) {
       if (gzRes2 && gzRes2.ok) {
         const buffer = await gzRes2.arrayBuffer();
         const uint8 = new Uint8Array(buffer);
-        const text2 = pako.ungzip(uint8, { to: 'string' });
-        const cleaned2 = String(text2).replace(/^\uFEFF/, '');
-        return JSON.parse(cleaned2);
+
+        // Detect gzip magic header 0x1f 0x8b
+        const isGzip = uint8 && uint8.length >= 2 && uint8[0] === 0x1f && uint8[1] === 0x8b;
+        if (isGzip) {
+          const text2 = pako.ungzip(uint8, { to: 'string' });
+          const cleaned2 = String(text2).replace(/^\uFEFF/, '');
+          return JSON.parse(cleaned2);
+        } else {
+          const decoder = new TextDecoder('utf-8');
+          const text2 = decoder.decode(uint8);
+          const cleaned2 = String(text2).replace(/^\uFEFF/, '');
+          return JSON.parse(cleaned2);
+        }
       }
     } catch (err) {
       console.warn(`Retry fetching/decompressing ${gzUrl} failed:`, err);
@@ -369,7 +340,7 @@ async function loadJSONWithGzFallback(url) {
     }
   }
 
-  // If content isn't JSON and not a pointer, try to parse anyway to raise a helpful error
+  // Otherwise parse the plain JSON text we received.
   try {
     const cleaned = String(text).replace(/^\uFEFF/, '');
     return JSON.parse(cleaned);
