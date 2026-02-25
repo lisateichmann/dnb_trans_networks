@@ -113,6 +113,49 @@ function normalizeLanguageKey(language) {
   return String(language).trim().toLowerCase().replace(/[^a-z0-9_\-]/gi, "");
 }
 
+// Generate normalized name variants for robust matching (diacritics removed, periods stripped,
+// swapped last/first, no-space-after-comma, lowercased, compact spacing). This is intentionally
+// kept as a small, relatively fast generator and used to precompute per-node variant sets.
+function generateNameVariants(name) {
+  if (!name) return [];
+  let s = String(name).trim();
+  if (!s) return [];
+  if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1).trim();
+  s = s.replace(/\s+/g, ' ');
+  // remove common punctuation (keep comma for swapped detection)
+  const stripPeriods = (str) => str.replace(/\./g, '');
+  const removeDiacritics = (str) => {
+    try {
+      return str.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    } catch (e) {
+      return str;
+    }
+  };
+  const base = removeDiacritics(s);
+  const noPeriods = stripPeriods(base);
+  const noSpaceAfterComma = noPeriods.replace(/,\s+/g, ',');
+  const lower = noPeriods.toLowerCase();
+  const lowerNoSpace = noSpaceAfterComma.toLowerCase();
+  const compact = noPeriods.replace(/\s+/g, ' ').trim();
+  const out = new Set([s, base, noPeriods, noSpaceAfterComma, lower, lowerNoSpace, compact, compact.toLowerCase()]);
+  if (s.includes(',')) {
+    const parts = s.split(',').map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const swapped = (parts.slice(1).join(' ') + ' ' + parts[0]).trim();
+      out.add(swapped);
+      out.add(removeDiacritics(swapped).replace(/\./g, '').toLowerCase());
+    }
+  } else if (s.includes(' ')) {
+    const parts = s.split(' ').map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      const lf = parts[0] + ',' + parts.slice(1).join(' ');
+      out.add(lf);
+      out.add(lf.toLowerCase());
+    }
+  }
+  return Array.from(out).filter(Boolean);
+}
+
 // Returns the centralization tier (core, periphery, outer) for a given score
 function getCentralizationTier(score, thresholds = getCentralizationThresholds()) {
   if (!Number.isFinite(score)) return "outer";
@@ -1806,20 +1849,104 @@ async function init() {
   let femaleAuthorsSet = null;
   try {
     const csvText = await fetch('author_femaleonly.csv').then((r) => r.text());
-    const lines = csvText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const lines = csvText.split(/\r?\n/).filter(Boolean);
     femaleAuthorsSet = new Set();
+
+    // CSV parser that respects quoted fields (use simple split but robust fallback)
+    function parseCsvLine(line) {
+      const fields = [];
+      let cur = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            cur += '"';
+            i++; // skip escaped quote
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          fields.push(cur);
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      fields.push(cur);
+      return fields.map((f) => f.trim());
+    }
+
+    // Normalization helper: strip diacritics, punctuation (periods), collapse spaces,
+    // produce swapped and no-space variants for robust matching.
+    function normalizeVariants(name) {
+      if (!name) return [];
+      let s = String(name).trim();
+      // remove wrapping quotes
+      if (s.startsWith('"') && s.endsWith('"')) s = s.slice(1, -1).trim();
+      // collapse multiple spaces
+      s = s.replace(/\s+/g, ' ');
+      // remove trailing/leading ASCII punctuation (avoid Unicode property escape)
+      s = s.replace(/^[!"#\$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]+|[!"#\$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]+$/g, '');
+      // helper to remove diacritics
+      const removeDiacritics = (str) => str.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+      const base = removeDiacritics(s);
+      const noPeriods = base.replace(/\./g, '');
+      const noSpaceAfterComma = noPeriods.replace(/,\s+/g, ',');
+      const lower = noPeriods.toLowerCase();
+      const lowerNoSpace = noSpaceAfterComma.toLowerCase();
+      const compact = noPeriods.replace(/\s+/g, ' ').trim();
+      const variants = new Set([s, base, noPeriods, noSpaceAfterComma, lower, lowerNoSpace, compact, compact.toLowerCase()]);
+      // if contains comma, add swapped variant: "Last, First" -> "First Last"
+      if (s.includes(',')) {
+        const parts = s.split(',').map((p) => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          const swapped = (parts.slice(1).join(' ') + ' ' + parts[0]).trim();
+          const swappedNorm = removeDiacritics(swapped).replace(/\./g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+          variants.add(swapped);
+          variants.add(swappedNorm);
+        }
+      } else if (s.includes(' ')) {
+        // also add "Last,First" style for names in data that use comma-less form: "Last First" -> "Last,First"
+        const parts = s.split(' ').map((p) => p.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          const lastfirst = parts[0] + ',' + parts.slice(1).join(' ');
+          variants.add(lastfirst);
+          variants.add(lastfirst.toLowerCase());
+        }
+      }
+      return Array.from(variants).filter(Boolean);
+    }
+
+    // Determine header index for author column if present
+    let authorCol = 0;
+    const headerFields = parseCsvLine(lines[0] || '');
+    const headerLower = headerFields.map((h) => String(h || '').toLowerCase());
+    if (headerLower.includes('author')) {
+      authorCol = headerLower.indexOf('author');
+    } else if (headerLower.includes('name')) {
+      authorCol = headerLower.indexOf('name');
+    } else if (headerLower.length >= 2) {
+      // Many rows are like: index,Author,ID,Gender -> pick second column
+      authorCol = 1;
+    }
+
     for (const line of lines) {
-      // Use the whole line as the author identifier (CSV likely contains names like "Last, First").
-      let candidate = String(line).replace(/^"|"$/g, "").trim();
-      if (!candidate) continue;
-      const lower = candidate.toLowerCase();
-      if (lower === 'author' || lower === 'name' || lower === 'id') continue;
-      // Normalize variant without space after comma (e.g., "Last, First" -> "Last,First")
-      const noSpace = candidate.replace(/,\s+/g, ',').trim();
-      femaleAuthorsSet.add(candidate);
-      femaleAuthorsSet.add(noSpace);
-      femaleAuthorsSet.add(candidate.toLowerCase());
-      femaleAuthorsSet.add(noSpace.toLowerCase());
+      try {
+        const fields = parseCsvLine(line);
+        const raw = fields[authorCol] || fields[1] || fields[0] || '';
+        let candidate = String(raw).replace(/^"|"$/g, '').trim();
+        if (!candidate) continue;
+        const lower = candidate.toLowerCase();
+        if (lower === 'author' || lower === 'name' || lower === 'id') continue;
+        const variants = normalizeVariants(candidate);
+        for (const v of variants) {
+          femaleAuthorsSet.add(v);
+          femaleAuthorsSet.add(String(v).toLowerCase());
+        }
+      } catch (errLine) {
+        // skip malformed lines
+      }
     }
   } catch (e) {
     console.warn('Could not load female authors lookup:', e);
@@ -1909,6 +2036,14 @@ async function init() {
     const node = { ...original };
     ensureNodeLanguageSet(node);
     node._labelNormalized = (node.label || `${node.id || ""}`).trim().toLowerCase();
+    // Precompute name variants for fast female-lookup matching. Stored as a Set on the node.
+    try {
+      const idVariants = generateNameVariants(original.id ?? original.label ?? '');
+      const labelVariants = generateNameVariants(node.label || node.id || '');
+      node._femaleVariantSet = new Set([...idVariants, ...labelVariants].map(v => String(v)));
+    } catch (e) {
+      node._femaleVariantSet = new Set();
+    }
     const keys = [];
     if (original.id !== undefined && original.id !== null) {
       keys.push(original.id);
@@ -1921,6 +2056,26 @@ async function init() {
     keys.forEach((key) => nodeById.set(key, node));
     return node;
   });
+
+  // Compute female-match flag for all nodes using the precomputed variant sets and the loaded lookup.
+  function computeFemaleMatches() {
+    if (!femaleAuthorsSet) {
+      nodes.forEach(n => { n._femaleMatch = false; });
+      return;
+    }
+    for (const n of nodes) {
+      let matched = false;
+      const variants = n._femaleVariantSet || new Set();
+      for (const v of variants) {
+        if (!v) continue;
+        if (femaleAuthorsSet.has(v) || femaleAuthorsSet.has(String(v).toLowerCase())) {
+          matched = true;
+          break;
+        }
+      }
+      n._femaleMatch = matched;
+    }
+  }
 
   const linkByPair = new Map();
   const links = rawData.links
@@ -2743,6 +2898,33 @@ async function init() {
         .join("")}</ul>`
       : '<p class="author-detail-empty">No weighted connections recorded.</p>';
 
+    // Helper: total unique connections count for the author
+    function getTotalConnections(n) {
+      const set = new Set();
+      state.links.forEach((l) => {
+        if (!l || !l.sourceNode || !l.targetNode) return;
+        if (l.sourceNode.id === n.id) set.add(l.targetNode.id);
+        else if (l.targetNode.id === n.id) set.add(l.sourceNode.id);
+      });
+      return set.size;
+    }
+
+    // Helper: comma-separated list of all languages for the author
+    function getAllLanguagesList(n) {
+      const langs = (n.languages || []).map((e) => String(e.language || '').trim()).filter(Boolean);
+      // unique and preserve order
+      const seen = new Set();
+      const uniq = [];
+      for (const l of langs) {
+        const up = l.toUpperCase();
+        if (!seen.has(up)) {
+          seen.add(up);
+          uniq.push(up);
+        }
+      }
+      return uniq.length ? uniq.join(', ') : 'n/a';
+    }
+
     authorDetailPanel.innerHTML = `
       <div class="author-detail-header">
         <div>
@@ -2755,6 +2937,10 @@ async function init() {
         <div class="author-detail-metric">
           <span>Total translations</span>
           <strong>${formatNumber(totalTranslations)}</strong>
+        </div>
+        <div class="author-detail-metric">
+          <span>Connections</span>
+          <strong>${formatNumber(getTotalConnections(node))}</strong>
         </div>
         <div class="author-detail-metric">
           <span>${escapeHtml(centralityMetricLabel)}</span>
@@ -2772,6 +2958,10 @@ async function init() {
       <div class="author-detail-section">
         <h3>Top languages</h3>
         ${languagesMarkup}
+      </div>
+      <div class="author-detail-section">
+        <h3>All languages</h3>
+        <p class="author-detail-small">${escapeHtml(getAllLanguagesList(node))}</p>
       </div>
       <div class="author-detail-section">
         <h3>Strongest ties</h3>
@@ -3328,9 +3518,63 @@ async function init() {
 
     // Check female authors filter (lookup from CSV)
     if (state.femaleFilter) {
-      const authorName = node.id || "";
       if (!state.femaleAuthorsSet) return false;
-      if (!state.femaleAuthorsSet.has(authorName) && !state.femaleAuthorsSet.has(String(authorName).toLowerCase())) return false;
+      const authorName = node.id || "";
+      const label = node.label || "";
+
+      // local normalization for checks (similar to normalizeVariants)
+      function removeDiacritics(str) {
+        try {
+          return String(str).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+        } catch (e) {
+          return String(str);
+        }
+      }
+      function genVariants(s) {
+        if (!s) return [];
+        let t = String(s).trim();
+        if (t.startsWith('"') && t.endsWith('"')) t = t.slice(1, -1).trim();
+        t = t.replace(/\s+/g, ' ');
+        const base = removeDiacritics(t).replace(/\./g, '');
+        const noSpace = base.replace(/,\s+/g, ',');
+        const lower = base.toLowerCase();
+        const lowerNoSpace = noSpace.toLowerCase();
+        const compact = base.replace(/\s+/g, ' ').trim();
+        const out = new Set([t, base, noSpace, lower, lowerNoSpace, compact, compact.toLowerCase()]);
+        if (t.includes(',')) {
+          const parts = t.split(',').map(p => p.trim()).filter(Boolean);
+          if (parts.length >= 2) {
+            const swapped = (parts.slice(1).join(' ') + ' ' + parts[0]).trim();
+            out.add(swapped);
+            out.add(removeDiacritics(swapped).replace(/\./g, '').toLowerCase());
+          }
+        } else if (t.includes(' ')) {
+          const parts = t.split(' ').map(p => p.trim()).filter(Boolean);
+          if (parts.length >= 2) {
+            const lf = parts[0] + ',' + parts.slice(1).join(' ');
+            out.add(lf);
+            out.add(lf.toLowerCase());
+          }
+        }
+        return Array.from(out).filter(Boolean);
+      }
+
+      // Use precomputed per-node variant set for fast matching. If not present, fall back to generation.
+      let matched = false;
+      try {
+        const variantSet = node._femaleVariantSet || new Set(genVariants(authorName).concat(genVariants(label)));
+        for (const v of variantSet) {
+          if (!v) continue;
+          if (state.femaleAuthorsSet.has(v) || state.femaleAuthorsSet.has(String(v).toLowerCase())) {
+            matched = true;
+            break;
+          }
+        }
+      } catch (e) {
+        // conservative fallback: if anything fails, don't show node
+        matched = false;
+      }
+      if (!matched) return false;
     }
 
     // Check tier filter
@@ -3642,6 +3886,10 @@ async function init() {
       state.femaleFilter = !state.femaleFilter;
       femaleAuthorsBtn.textContent = state.femaleFilter ? "Show All Authors" : "Show Female Authors";
       femaleAuthorsBtn.classList.toggle("active", state.femaleFilter);
+      // Recompute per-node female matches when toggling the filter on
+      if (state.femaleFilter) {
+        try { computeFemaleMatches(); } catch (e) {}
+      }
       updateFilterStatus();
       draw();
     });
