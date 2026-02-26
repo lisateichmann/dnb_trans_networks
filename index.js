@@ -2909,9 +2909,12 @@ async function init() {
       return set.size;
     }
 
-    // Helper: comma-separated list of all languages for the author
+    // Helper: list of all unique languages (uppercase) for the author
+    // returns an array so callers can compute both the display string and the count
     function getAllLanguagesList(n) {
-      const langs = (n.languages || []).map((e) => String(e.language || '').trim()).filter(Boolean);
+      const langs = (n.languages || [])
+        .map((e) => String(e.language || '').trim())
+        .filter(Boolean);
       // unique and preserve order
       const seen = new Set();
       const uniq = [];
@@ -2922,7 +2925,7 @@ async function init() {
           uniq.push(up);
         }
       }
-      return uniq.length ? uniq.join(', ') : 'n/a';
+      return uniq; // array of uppercase language codes
     }
 
     authorDetailPanel.innerHTML = `
@@ -2940,7 +2943,7 @@ async function init() {
         </div>
         <div class="author-detail-metric">
           <span>Total languages</span>
-          <strong>${escapeHtml(getAllLanguagesList(node)).length}</strong>
+          <strong>${getAllLanguagesList(node).length}</strong>
         </div>
         <div class="author-detail-metric">
           <span>Connections</span>
@@ -2965,7 +2968,7 @@ async function init() {
       </div>
       <div class="author-detail-section">
         <h3>All languages</h3>
-        <p class="author-detail-small">${escapeHtml(getAllLanguagesList(node))}</p>
+        <p class="author-detail-small">${escapeHtml(getAllLanguagesList(node).join(', ') || 'n/a')}</p>
       </div>
       <div class="author-detail-section">
         <h3>Strongest ties</h3>
