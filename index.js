@@ -2939,6 +2939,10 @@ async function init() {
           <strong>${formatNumber(totalTranslations)}</strong>
         </div>
         <div class="author-detail-metric">
+          <span>Total languages</span>
+          <strong>${escapeHtml(getAllLanguagesList(node)).length}</strong>
+        </div>
+        <div class="author-detail-metric">
           <span>Connections</span>
           <strong>${formatNumber(getTotalConnections(node))}</strong>
         </div>
