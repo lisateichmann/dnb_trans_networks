@@ -1,0 +1,258 @@
+================================================================
+LANGUAGE-LANGUAGE TRANSLATION NETWORK — STRUCTURAL MEASURES
+================================================================
+  Graph type  : undirected weighted (NetworkX Graph)
+  Data source : data.csv
+  Node type   : target language (ISO 639-2/B code)
+  Edge type   : language pair sharing ≥1 common author
+  Edge weight : number of shared authors
+  Generated   : 2026-03-09 15:03:48
+
+================================================================
+BASIC GRAPH STATISTICS
+================================================================
+  Nodes                                        81
+  Edges                                        2213
+  Graph density                                0.683025
+  Self-loops                                   0
+  Is connected                                 True
+  Number of connected components               1
+
+================================================================
+DEGREE STATISTICS  (unweighted)
+================================================================
+  Average degree                               54.6420
+  Min degree                                   1
+  Max degree                                   77
+
+  Per-node degree (sorted descending):
+    eng            77
+    fre            76
+    hun            76
+    spa            75
+    dut            75
+    pol            75
+    ita            74
+    tur            74
+    ger            74
+    rus            74
+    chi            73
+    rum            72
+    bul            72
+    gre            72
+    slo            72
+    srp            72
+    cze            71
+    cat            71
+    est            70
+    por            70
+    slv            70
+    dan            70
+    hrv            70
+    fin            69
+    nor            69
+    per            69
+    lav            68
+    lit            67
+    ara            67
+    baq            67
+    kor            66
+    heb            66
+    swe            66
+    ukr            66
+    aze            65
+    jpn            64
+    alb            64
+    glg            64
+    mac            64
+    arm            62
+    ice            62
+    lat            62
+    vie            61
+    geo            61
+    bel            61
+    epo            60
+    hin            58
+    ind            58
+    fry            55
+    tha            55
+    bos            55
+    may            54
+    mon            54
+    kur            53
+    urd            52
+    fao            51
+    bre            49
+    roh            48
+    mal            48
+    wel            47
+    sin            47
+    nds            43
+    bas            43
+    oci            42
+    gle            42
+    ben            38
+    nno            38
+    afr            29
+    gla            28
+    ltz            26
+    mlt            23
+    dsb            21
+    wln            21
+    yid            21
+    bnt            19
+    swa            17
+    kir            11
+    kaz            6
+    mul            5
+    gsw            3
+    tir            1
+
+================================================================
+STRENGTH  (weighted degree = sum of edge weights)
+================================================================
+  Average strength                             1674.4938
+  Min strength                                 1
+  Max strength                                 6666
+
+  Per-node strength (sorted descending):
+    fre            6666
+    spa            6362
+    ita            6202
+    eng            5992
+    dut            5796
+    cze            5467
+    pol            5184
+    rus            4416
+    hun            4399
+    bul            3928
+    tur            3921
+    swe            3892
+    dan            3778
+    por            3763
+    nor            3603
+    srp            3531
+    gre            3529
+    slv            3385
+    hrv            3131
+    est            3101
+    lit            3055
+    fin            3009
+    chi            2860
+    rum            2828
+    cat            2658
+    slo            2630
+    jpn            2569
+    lav            2499
+    heb            2454
+    ger            2193
+    kor            1779
+    ukr            1534
+    mac            1434
+    ara            1428
+    alb            1346
+    per            1275
+    baq            1104
+    geo            1043
+    glg            831
+    vie            797
+    ice            770
+    bel            665
+    aze            559
+    arm            544
+    bos            451
+    epo            441
+    ind            378
+    hin            263
+    mon            229
+    lat            196
+    tha            162
+    bre            138
+    urd            135
+    roh            134
+    may            131
+    fao            127
+    fry            110
+    kur            95
+    nds            85
+    wel            77
+    oci            54
+    gle            50
+    mal            48
+    sin            47
+    bas            43
+    afr            43
+    ben            38
+    nno            38
+    ltz            33
+    gla            28
+    mlt            23
+    dsb            21
+    wln            21
+    yid            21
+    bnt            19
+    swa            17
+    kir            11
+    kaz            6
+    gsw            5
+    mul            5
+    tir            1
+
+================================================================
+DIAMETER & AVERAGE PATH LENGTH  (unweighted, largest component)
+================================================================
+  Largest component — nodes                    81
+  Largest component — edges                    2213
+  Diameter (unweighted)                        3
+  Average path length (unweighted)             1.320988
+  Elapsed (s)                                  0.01
+
+================================================================
+CLUSTERING COEFFICIENTS  (unweighted)
+================================================================
+  Average clustering coefficient               0.887257
+  Global clustering coefficient (transitivity) 0.858571
+
+================================================================
+COMMUNITY DETECTION
+================================================================
+  Edge weights used: YES  ('weight' = # shared authors)
+
+  ── Fast-greedy  (greedy_modularity_communities)
+     Communities detected : 2
+     Modularity Q         : 0.026564
+     Elapsed (s)          : 0.08
+
+  ── Louvain  (louvain_communities, seed=42)
+     Communities detected : 2
+     Modularity Q         : 0.026476
+     Elapsed (s)          : 0.02
+
+  ── Leiden  (leidenalg ModularityVertexPartition, seed=42)
+     Communities detected : 2
+     Modularity Q         : -0.017983
+     Elapsed (s)          : 0.01
+
+
+================================================================
+SOURCE COMPARISON  (data.csv  vs  language_language_graph.json)
+================================================================
+  Metric                               CSV          JSON               
+  ──────────────────────────────────   ──────────   ──────────         
+  Nodes                                81           81                ✓
+  Edges                                2213         2213              ✓
+  Density                              0.683025     0.683025          ✓
+  Avg degree                           54.6420      54.6420           ✓
+  Min degree                           1            1                 ✓
+  Max degree                           77           77                ✓
+  Diameter (unweighted)                3            3                 ✓
+  Avg path length (unweighted)         1.320988     1.320988          ✓
+  Avg clustering coeff.                0.887257     0.887257          ✓
+  Global clustering (transitivity)     0.858571     0.858571          ✓
+  Fast-greedy communities              2            2                 ✓
+  Fast-greedy modularity Q             0.026564     0.026564          ✓
+  Louvain communities                  2            2                 ✓
+  Louvain modularity Q                 0.026476     0.026476          ✓
+  Leiden communities                   2            2                 ✓
+  Leiden modularity Q                  -0.017983    -0.017983         ✓
+

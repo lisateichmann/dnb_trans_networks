@@ -1,0 +1,47 @@
+========================================================================
+COMMUNITY DETECTION — LANGUAGE-LANGUAGE TRANSLATION NETWORK
+========================================================================
+  Data source : data.csv
+  Edge type   : language pair sharing ≥1 common author
+  Edge weight : number of shared authors
+  Generated   : 2026-03-09 15:14:24
+
+  Algorithm                 Q score    Communities   Weights used   Time (s)
+  ──────────────────────────────────────────────────────────────────────────
+  Fast-greedy              0.023214              3            Yes       0.05
+  Louvain                  0.026476              2            Yes       0.02
+  Leiden                  -0.017983              2            Yes       0.01
+  Infomap *                0.000000              1            Yes       0.01
+
+  * Infomap's native objective is the map equation (codelength), not
+    modularity Q.  Q = 0 here because Infomap found 1 community — on a
+    graph this dense (density=0.68) the flow-based objective sees no
+    benefit in splitting the network.  See codelength below.
+
+────────────────────────────────────────────────────────────────────────
+  Fast-greedy
+  Q (modularity) = 0.023214  |  3 communities  |  Weights: Yes
+    Community 0: alb, ara, arm, aze, baq, bas, bel, ben, bnt, bos, bre, chi, dsb, epo, est, fao, fry, geo, ger, gla, gle, glg, hin, ice, ind, kor, kur, lat, lav, lit, ltz, mac, mal, may, mon, nds, nno, oci, per, roh, rum, sin, slo, tha, tir, ukr, urd, vie, wel, wln, yid
+    Community 1: bul, cze, dut, eng, fre, gsw, hun, ita, kaz, kir, mlt, pol, rus, spa, swa, tur
+    Community 2: afr, cat, dan, fin, gre, heb, hrv, jpn, mul, nor, por, slv, srp, swe
+
+────────────────────────────────────────────────────────────────────────
+  Louvain
+  Q (modularity) = 0.026476  |  2 communities  |  Weights: Yes
+    Community 0: bul, cze, dan, dut, eng, fre, gre, gsw, hrv, hun, ita, jpn, kaz, kir, mlt, pol, por, rus, slv, spa, swa, swe, tur
+    Community 1: afr, alb, ara, arm, aze, baq, bas, bel, ben, bnt, bos, bre, cat, chi, dsb, epo, est, fao, fin, fry, geo, ger, gla, gle, glg, heb, hin, ice, ind, kor, kur, lat, lav, lit, ltz, mac, mal, may, mon, mul, nds, nno, nor, oci, per, roh, rum, sin, slo, srp, tha, tir, ukr, urd, vie, wel, wln, yid
+
+────────────────────────────────────────────────────────────────────────
+  Leiden
+  Q (modularity) = -0.017983  |  2 communities  |  Weights: Yes
+    Community 0: alb, ara, arm, aze, baq, bas, bel, ben, bnt, bos, bre, cat, chi, dsb, epo, est, fao, fin, fry, geo, ger, gla, gle, glg, heb, hin, ice, ind, kaz, kor, kur, lat, lav, lit, ltz, mac, mal, may, mon, mul, nds, nno, oci, per, roh, rum, sin, slo, swa, tha, tir, ukr, urd, vie, wel, wln, yid
+    Community 1: afr, bul, cze, dan, dut, eng, fre, gre, gsw, hrv, hun, ita, jpn, kir, mlt, nor, pol, por, rus, slv, spa, srp, swe, tur
+
+────────────────────────────────────────────────────────────────────────
+  Infomap
+  Q (modularity) = 0.000000  |  1 communities  |  Weights: Yes
+  Native metric  — Codelength (map equation, bits): 5.378394
+  (Q = 0 because all nodes fall in one module; codelength is the meaningful output for Infomap)
+    Community 0: afr, alb, ara, arm, aze, baq, bas, bel, ben, bnt, bos, bre, bul, cat, chi, cze, dan, dsb, dut, eng, epo, est, fao, fin, fre, fry, geo, ger, gla, gle, glg, gre, gsw, heb, hin, hrv, hun, ice, ind, ita, jpn, kaz, kir, kor, kur, lat, lav, lit, ltz, mac, mal, may, mlt, mon, mul, nds, nno, nor, oci, per, pol, por, roh, rum, rus, sin, slo, slv, spa, srp, swa, swe, tha, tir, tur, ukr, urd, vie, wel, wln, yid
+
+========================================================================
