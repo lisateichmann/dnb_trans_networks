@@ -2,6 +2,10 @@
 
 A network analysis and interactive visualization project exploring the transfer routes and canons of German fiction in translation (translated fiction originally published in German) using bibliographic data from the German National Library (Deutsche Nationalbibliothek, DNB).
 
+[![Live demo](prototype.png)](https://lisateichmann.github.io/dnb_trans_networks/)
+
+**[→ Open the live demo](https://lisateichmann.github.io/dnb_trans_networks/)**
+
 ## Web application
 
 The interactive web application with visualizations can be accessed here: https://lisateichmann.github.io/dnb_trans_networks/
@@ -33,6 +37,11 @@ The analysis pipeline combines Python-based network construction and analysis wi
 ├── analyze_networks.py               # Statistical analysis and plotting
 ├── extract_csv.py                    # Export CSVs from network JSONs for tabular analysis
 ├── plot_networks.py                  # Generates plots and Markdown tables from network data
+├── network_measures.py               # Structural measures for the language-language network
+├── network_measures.txt              # Output: structural measures report (cross-validated CSV vs JSON)
+├── community_detection.py            # Community detection comparison (Fast-greedy, Louvain, Leiden, Infomap)
+├── community_detection_comparison.txt# Output: per-algorithm Q scores and community listings
+├── community_memberships.csv         # Output: per-language community assignment across all algorithms
 ├── index.html                        # Main visualization interface
 ├── main.js                           # Visualization orchestration
 ├── requirements.txt                  # Python dependencies
@@ -68,6 +77,76 @@ The analysis pipeline combines Python-based network construction and analysis wi
 	└── dist/                         # Production build output (after `npm run build`)
 ```
 
+
+## Network Analysis Outputs
+
+Two standalone scripts produce publication-ready measurements of the **language-language network** and save their results to plain-text/CSV files in the project root.
+
+### `network_measures.py` — structural measures
+
+```bash
+.venv/bin/python network_measures.py
+# or, to cross-validate against the pre-built JSON:
+.venv/bin/python network_measures.py --json data/language_language_graph.json
+```
+
+Output: **`network_measures.txt`**
+
+The script builds the language-language graph directly from `data.csv` (same algorithm as `prepare_data.py`), computes all structural measures, optionally cross-validates every number against the pre-built JSON, and appends a side-by-side comparison table.
+
+#### Key structural measures (language-language network)
+
+| Metric | Value | Description |
+|---|---|---|
+| Nodes | 81 | One node per target language (ISO 639-2/B code) |
+| Edges | 2 213 | Language pairs sharing ≥ 1 common author |
+| Graph density | 0.6830 | 68 % of all possible language-pair edges exist — the network is nearly complete |
+| Average degree | 54.64 | Each language is connected to on average 55 of the other 80 languages |
+| Min / Max degree | 1 / 77 | `tir` (Tigrinya) is the most peripheral; `eng` (English) the most connected |
+| Average clustering coefficient | 0.8873 | Language neighbourhoods are extremely tightly knit |
+| Global clustering (transitivity) | 0.8586 | Nearly nine out of ten connected triples form a closed triangle |
+| Diameter (unweighted) | 3 | Any two languages are at most 3 hops apart |
+| Average path length (unweighted) | 1.3210 | On average languages are reachable in just over one step |
+
+The very high density and clustering, combined with a diameter of only 3, indicate a **small-world, near-clique structure** in which the overwhelming majority of language pairs share at least one common author. This is consistent with the dominance of a small group of prolific authors who have been translated into many languages simultaneously.
+
+---
+
+### `community_detection.py` — community detection
+
+```bash
+.venv/bin/python community_detection.py
+```
+
+Outputs:
+- **`community_detection_comparison.txt`** — headline table + per-algorithm community listings
+- **`community_memberships.csv`** — one row per language, one column per algorithm
+
+#### Community detection results
+
+| Algorithm | Q score | Communities | Weights used | Note |
+|---|---|---|---|---|
+| Fast-greedy | 0.0232 | **3** | Yes | `resolution=1.05`, `best_n=3` |
+| Louvain | 0.0265 | 2 | Yes | `seed=42` |
+| Leiden | −0.0180 | 2 | Yes | ModularityVertexPartition, `seed=42` |
+| Infomap | 0.0000 \* | 1 | Yes | Codelength = 5.38 bits |
+
+\* Infomap's native objective is the map equation (codelength), not modularity Q. Q = 0 by definition when all nodes fall in one community.
+
+#### Why Fast-greedy was selected
+
+All four algorithms return very low modularity Q values (≤ 0.027), which is mathematically expected for a network with density 0.68 — a near-complete graph offers almost no room for non-overlapping community structure. Among the algorithms that *do* partition the network:
+
+- **Louvain and Leiden** converge on 2 communities that largely separate high-volume European languages (French, Spanish, Italian, Dutch, Polish, …) from lower-volume or non-European ones. This is a plausible but coarse partition.
+- **Infomap** collapses all 81 languages into a single community, consistent with its flow-based objective on dense graphs.
+- **Fast-greedy** (with `resolution=1.05`, `best_n=3`) produces a **3-community partition** with Q = 0.0232 that is directly cross-validated against the JSON produced by `prepare_data.py` (stored `greedyModularity = 0.02321…`). It also agrees exactly with the community assignments in `language_language_graph.json`.
+
+Fast-greedy was therefore adopted as the primary community assignment for the language-language network because:
+1. It produces the only 3-community partition, which aligns best with the three broad translation-market clusters visible in the interactive visualization.
+2. Its result is deterministic and reproducible (no random seed required).
+3. The modularity Q matches the pre-built JSON to six decimal places, confirming end-to-end consistency between the analysis scripts and the visualization data.
+
+---
 
 ## Workflow
 
@@ -245,37 +324,28 @@ All visualizations update dynamically as you interact—no page reloads required
 
 ## Deploy to GitHub Pages
 
-You can deploy the interactive visualization (including all JSON and CSV data files) to GitHub Pages using the provided workflow. This allows you to share your analysis and interactive dashboard as a static website, with all data files accessible for client-side loading.
-
-### How it works
-
-- The workflow in `.github/workflows/deploy-pages.yml` automatically deploys the repository to GitHub Pages on every push to the `main` branch (or when manually triggered).
-- It uploads the entire repository contents (including `index.html`, all scripts, JSON, and CSV files) as a static site.
-- GitHub Pages serves all files as static assets, so your D3.js app can fetch JSON and CSV files just like when running `python -m http.server` locally.
+Deployment uses the `gh-pages` npm package, which pushes the production build to the `gh-pages` branch automatically.
 
 ### Steps to deploy
 
-1. **Push your changes to the `main` branch** (or trigger the workflow manually from the Actions tab).
-2. The workflow will build and deploy the site to GitHub Pages automatically.
-3. After deployment, your site will be available at:
-	- `https://<your-username>.github.io/<your-repo>/` (for user/org pages, or with the repo name for project pages)
+```bash
+npm run build   # build the production bundle into dist/
+npm run deploy  # push dist/ to the gh-pages branch
+```
 
-### Notes
+After `npm run deploy` completes, the updated site is live at:
 
-- No build step is required: the workflow simply uploads your static files as-is.
-- All data files in `data/`, `extracted/`, and generated plots/tables are accessible to the web app and can be fetched by D3.js.
-- If you add or update data, just commit and push—GitHub Pages will serve the latest version after the workflow completes.
-
+**https://lisateichmann.github.io/dnb_trans_networks/**
 
 ### Local development (legacy/static)
 
-If you prefer, you can still serve the static files (including the production build) using:
+If you prefer, you can serve the production build locally using:
 
 ```bash
 python -m http.server 8000
 ```
 
-from the appropriate directory (`src/dist` for production, or project root for legacy mode). This mimics the static file serving provided by GitHub Pages.
+from the `dist/` directory. This mirrors what GitHub Pages serves.
 
 
 ## Statistical Analysis & Reporting
@@ -300,9 +370,6 @@ Outputs are saved to `plots/centralization/`, `plots/dendrograms/`, and `plots/t
 
 
 **Browser Compatibility** — Modern browsers with ES6 module and SVG support
-
-
-> _Screenshot placeholder: Wide shot of the cluster dashboard showing histograms, language bars, and toggles._
 
 
 The warped-force layout runs in static mode by default so you see the final rings immediately, but you can still pan or zoom without restarting the simulation. All controls and filters update the view instantly.
